@@ -2,8 +2,8 @@
 
 > [!IMPORTANT]
 > **Executive Status Summary:**
-> * **Ordered Production Hardware (`Build D`):** Complete 10-line / 20-unit COTS Bill of Materials (`$1,341.94` parts subtotal) has been ordered and confirmed.
-> * **Software, Codec, FEC & Anti-Jamming Stack:** **`100%` Complete & Verified (`23/23` Automated Simulation Tests Passing)**.
+> * **Ordered Production Hardware (`Build D`):** Complete `10-SKU / 20-piece` COTS Bill of Materials for **`1 Complete TX + RX Link Pair`** (`$1,341.94` parts subtotal) has been ordered and confirmed.
+> * **Software, Codec, FEC & Anti-Jamming Stack:** **`100%` Complete & Verified (`24/24` Automated Simulation Tests Passing)**.
 > * **Assembly Time:** **`~35–45 minutes total`** for both nodes (`~15 min` TX node + `~15 min` RX node + `~10 min` USB/software check) with **zero soldering**.
 
 ![Pin-Accurate Blueprint & Ordered 10-Line DigiKey BOM](images/sky_relay_20km_troposcatter_blueprint.png)
@@ -14,7 +14,7 @@
 
 | Subsystem / Layer | Readiness | Verified Capabilities & Status |
 | :--- | :---: | :--- |
-| **1. `Build D` (`200 m – 20 km`) All-Weather `2.4 GHz` Troposcatter & Canopy-Bounce Link Budget** | **`100%` (Software & BOM Ordered)** | Verified across all 5 Finnish weather regimes (**Clear `-30°C` Kaamos Night**, **Midsummer `24h` Sun**, **Heavy Rain `25 mm/hr`**, **Dense Saimaa Fog**, and **Winter Blizzard Snow**) with **`+14.1 dB` to `+62.3 dB` net SNR**. All 20 hardware units ordered on DigiKey. |
+| **1. `Build D` (`200 m – 20 km`) All-Weather `2.4 GHz` Troposcatter & Canopy-Bounce Link Budget** | **`100%` (Software & BOM Ordered)** | Verified across all 5 Finnish weather regimes (**Clear `-30°C` Kaamos Night**, **Midsummer `24h` Sun**, **Heavy Rain `25 mm/hr`**, **Dense Saimaa Fog**, and **Winter Blizzard Snow**) with **`+14.1 dB` to `+62.3 dB` net SNR**. Complete 10-SKU (`20-piece`) BOM for 1 TX+RX link pair ordered on DigiKey. |
 | **2. 6-Layer Electronic Anti-Jamming & Out-of-ISM Guard-Band Hopping** | **`100%` (`Tests 22–23` Passed)** | Cryptographic carrier hopping (`2380.373 MHz` / `2487.818 MHz` out-of-ISM guard bands + `2459.116 MHz`), `10–35 kHz` baseband FHSS, MAD barrage-jammer pass rejection (`+40 dB` jammer immunity), `$4\sigma$` pulsed/chirp burst blanker, and `2D` Costas CFO/timing lock-in. |
 | **3. Bit-Interleaved `Hamming(8,4)` SECDED + Erasure FEC** | **`100%` (`Tests 4–10` Passed)** | Protects the 2-byte frame length header and payload across bit-interleaved codewords; automatically repairs `0b111` symbol erasures (up to `37.5%` single-pass frame wipeout) and combines multi-pass bursts. |
 | **4. `DD\x01` + `DD\x02` Target-Crop JPEG Bridge to `receiver_hub.py`** | **`100%` (`Test 15` Passed)** | Segments signed camera alerts into `SKFG` sub-frames and reassembles byte-identical `Ed25519`-verified `.jpg` files and `alerts_journal.jsonl` entries inside `receiver_hub.py`. |

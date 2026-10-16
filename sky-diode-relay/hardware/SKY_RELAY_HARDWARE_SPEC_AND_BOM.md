@@ -2,7 +2,7 @@
 
 > [!IMPORTANT]
 > **ORDERED PRODUCTION HARDWARE BASELINE (`Build D`):**
-> Following 5 engineering iterations and the [Design Evolution & Stability Audit](../docs/DESIGN_EVOLUTION_AND_STABILITY_RECORD.md), **`Build D` (`200 m – 20 km` All-Weather `2.4 GHz` Troposcatter, Hydrometeor & Canopy-Bounce Relay)** is the primary ordered hardware configuration (`10 line items / 20 units`, **`$1,341.94` parts subtotal**).
+> Following 5 engineering iterations and the [Design Evolution & Stability Audit](../docs/DESIGN_EVOLUTION_AND_STABILITY_RECORD.md), **`Build D` (`200 m – 20 km` All-Weather `2.4 GHz` Troposcatter, Hydrometeor & Canopy-Bounce Relay)** is the primary ordered hardware configuration (**`1 Complete TX + RX Link Pair`** — `10 BOM SKUs / 20 individual part pieces total`, **`$1,341.94` parts subtotal**).
 > * **Zero Soldering Required:** Every module is a pre-assembled, factory-tested evaluation board (`Analog Devices`, `Skyworks`, `Mini-Circuits`, `L-com`, `TDK-Lambda`, `Raspberry Pi`, `Hammond`) that connects via standard `SMA` coaxial jumpers and screw terminals in **`~35–45 minutes total`**.
 > * **100% Non-Chinese Manufacturer Origin:** Every single component is manufactured by vetted US, UK, Japanese, or Canadian manufacturers.
 > * **⚠️ RF Regulatory Disclaimer (Traficom / EU ETSI EN 300 328) & `--civilian-eu-compliant` Mode:**
@@ -16,7 +16,7 @@
 
 ---
 
-## 1. Ordered `Build D` Complete 2-Node Bill of Materials ()
+## 1. Ordered `Build D` Complete 2-Node Bill of Materials (`1 TX Node + 1 RX Node`)
 
 | Line | DigiKey Part # | Manufacturer Part # | Manufacturer & Origin | Component Role & Technical Specification | Qty | Unit Price | Line Total |
 | :---: | :--- | :--- | :--- | :--- | :---: | :---: | :---: |
@@ -30,7 +30,7 @@
 | **8** | `5073-HG2414P-ND` | **`HG2414P`** | **L-com** *(USA)* | **`14.0 dBi` `2.4 GHz` Outdoor Weatherproof Flat-Panel Antenna** (`30° × 30°` beam, UV-stable radome, pole bracket, `N-Female`) | **2** | `$111.25` | **`$222.50`** |
 | **9** | `J3712-ND` | **`415-0029-012`** | **Cinch / Johnson** *(USA)* | **Precision `12"` (`305 mm`) Double-Shielded `RG-142` PTFE Coax Jumpers** (`SMA-Male` to `SMA-Male`, gold-plated brass) | **4** | `$20.76` | **`$83.04`** |
 | **10** | `ACX1345-ND` | **`242125`** | **Amphenol RF** *(USA)* | **Precision `N-Male` to `SMA-Female` Straight RF Adapters** (`50 Ω`, mates `HG2414P` `N-Female` port to `SMA` coax) | **2** | `$14.17` | **`$28.34`** |
-| — | **ORDER TOTAL** | **`10-Line BOM`** | **100% In Stock (20 Units)** | **Parts Subtotal: `$1,341.94`**  | **20** | — | **`$1,341.94`** |
+| — | **ORDER TOTAL** | **`10 BOM SKUs`** | **100% In Stock (`20 Individual Part Pieces`)** | **1 Complete TX + RX Link Pair (`$1,341.94` Subtotal)** | **20 pcs** | — | **`$1,341.94`** |
 
 ---
 
