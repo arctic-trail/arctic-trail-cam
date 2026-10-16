@@ -9,30 +9,31 @@
 .program pio_pulse_modulator
 
 ; Pull 32-bit word from FIFO containing:
-;   - Lower 16 bits (X): Inter-pulse pre-delay loop count (100 ns per step @ 100 MHz)
-;   - Upper 16 bits (Y): Optical pulse high width loop count (10 ns per step @ 100 MHz)
+;   - Lower 16 bits (X): Inter-pulse pre-delay loop count (exact 100 ns per step @ 100 MHz for all X >= 0)
+;   - Upper 16 bits (Y): Optical pulse high width loop count (high duration = (Y + 2) * 10 ns @ 100 MHz)
 ; Fail-safe invariant: Output pin is driven LOW before waiting on TX FIFO so an empty
 ; FIFO or stalled host CPU can never leave the GaN laser/UVC driver energized.
 .wrap_target
 entry:
-    set pins, 0                 ; Fail-safe: guarantee driver OFF while waiting for FIFO
-    pull block                  ; Wait for next 32-bit PPM timing word from TX FIFO
-    out x, 16                   ; Lower 16 bits = Inter-pulse delay count (in 100ns steps)
-    out y, 16                   ; Upper 16 bits = Optical pulse width count (in 10ns steps)
+    set pins, 0                 ; 1 cyc: Fail-safe guarantee driver OFF while waiting for FIFO
+    pull block                  ; 1 cyc: Wait for next 32-bit PPM timing word from TX FIFO
+    out x, 16                   ; 1 cyc: Lower 16 bits = Inter-pulse delay count (in 100ns steps)
+    out y, 16                   ; 1 cyc: Upper 16 bits = Optical pulse width count (y = ticks - 2)
 
-    jmp !x pulse_guard          ; If delay count is 0, skip delay loop
 slot_delay_loop:
-    jmp x-- slot_delay_loop [9] ; 10 cycles per iteration (100 ns @ 100 MHz)
+    jmp !x pulse_guard          ; 1 cyc: Exit delay loop when X == 0 (exact X iterations of 10 cycles)
+    jmp x-- slot_delay_loop [8] ; 9 cyc: Decrement X and loop (1 + 9 = 10 cycles = 100 ns @ 100 MHz)
 
 pulse_guard:
-    jmp !y entry                ; Safety guard: if pulse width is 0, never assert pin HIGH
+    jmp !y entry                ; 1 cyc: Safety guard: if Y == 0, never assert pin HIGH
 
 pulse_high:
-    set pins, 1                 ; Turn ON GaN driver (1550nm Laser / 265nm UVC LED ON)
+    set pins, 1                 ; 1 cyc: Turn ON GaN driver (pin transitions HIGH)
 pulse_width_loop:
-    jmp y-- pulse_width_loop    ; High pulse duration (10 ns resolution per count)
+    jmp y-- pulse_width_loop    ; (Y + 1) cyc: High pulse hold loop (10 ns per cycle)
 
 pulse_low:
-    set pins, 0                 ; Turn OFF GaN driver immediately
+    set pins, 0                 ; 1 cyc: Turn OFF GaN driver immediately (total HIGH = (Y + 2) * 10 ns)
 .wrap
+
 

@@ -11,9 +11,8 @@ import struct
 import math
 
 def test_radar_packet_unpack():
-    print("[*] Testing HLK-LD2450 29-byte basic frame unpacking...")
-    # Protocol: 0xAA, 0xFF (Header) + 2 bytes + Target 1 (X: int16, Y: int16, Spd: int16, Res: uint16)
-    # Target 1: X = 200 mm, Y = 3500 mm (0x0DAC), Speed = 120 cm/s
+    print("[*] Testing HLK-LD2450 30-byte full frame unpacking (with 0x55 0xCC footer & 3 target slots)...")
+    # Protocol: 0xAA, 0xFF, 0x03, 0x00 (4B Header) + Target 1..3 (3 x 8B) + 0x55, 0xCC (2B Footer) = 30 bytes
     header = b"\xAA\xFF\x03\x00"
     target1_x = 200
     target1_y = 3500
@@ -21,12 +20,11 @@ def test_radar_packet_unpack():
     target1_bytes = struct.pack("<hhhH", target1_x, target1_y, target1_spd, 0)
     target2_bytes = bytes(8)
     target3_bytes = bytes(8)
-    footer = b"\x55\xCC\x00"
+    footer = b"\x55\xCC"
     raw_packet = header + target1_bytes + target2_bytes + target3_bytes + footer
-    raw_packet = raw_packet[:29]
 
-    assert len(raw_packet) == 29, f"Packet length should be 29, got {len(raw_packet)}"
-    assert raw_packet[0] == 0xAA and raw_packet[1] == 0xFF, "Invalid frame header"
+    assert len(raw_packet) == 30, f"Packet length should be 30, got {len(raw_packet)}"
+    assert raw_packet[:4] == b"\xAA\xFF\x03\x00" and raw_packet[28:30] == b"\x55\xCC", "Invalid frame header/footer"
 
     # Test both positive (bit 15 = 1) and negative (bit 15 = 0) sign-magnitude HLK-LD2450 values
     # In HLK-LD2450 protocol: bit 15 = 1 means positive, bit 15 = 0 means negative
@@ -34,7 +32,7 @@ def test_radar_packet_unpack():
     neg_x_u16 = 200             # -200 mm
     pos_spd_u16 = 0x8000 | 120  # +120 cm/s
     signed_pkt = header + struct.pack("<HHHH", neg_x_u16, pos_y_u16, pos_spd_u16, 0) + target2_bytes + target3_bytes + footer
-    signed_pkt = signed_pkt[:29]
+    assert len(signed_pkt) == 30
 
     import sys
     import types

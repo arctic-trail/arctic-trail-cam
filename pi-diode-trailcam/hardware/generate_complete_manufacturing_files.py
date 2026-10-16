@@ -563,23 +563,31 @@ def generate_all(base_dir):
         f.write("%LPD*%\n")
         f.write("M02*\n")
 
-    # 8. Generate In2_Cu.gbr (Power Plane with Antipad clearances)
+    # 8. Generate In2_Cu.gbr (Isolated Split Power Plane Zones with Per-Zone Antipad Clearances)
+    in2_power_zones = [
+        ("+12V_RAW", 6.0, 66.0, 34.0, 78.0),
+        ("+3V3_ALWAYS_ON", 42.0, 22.0, 95.0, 65.0),
+        ("+3V3_SENSORS", 72.0, 67.0, 96.0, 78.0),
+    ]
     with open(os.path.join(gerber_dir, "pi-diode-carrier-In2_Cu.gbr"), "w") as f:
         write_gerber_hdr(f, "In2_Cu", "Copper,L3,Inr")
         write_apertures(f)
-        f.write("G36*\n")
-        f.write(f"X{fmt_coord(2.0)}Y{fmt_coord(2.0)}D02*\n")
-        f.write(f"X{fmt_coord(BOARD_W - 2.0)}Y{fmt_coord(2.0)}D01*\n")
-        f.write(f"X{fmt_coord(BOARD_W - 2.0)}Y{fmt_coord(BOARD_H - 2.0)}D01*\n")
-        f.write(f"X{fmt_coord(2.0)}Y{fmt_coord(BOARD_H - 2.0)}D01*\n")
-        f.write(f"X{fmt_coord(2.0)}Y{fmt_coord(2.0)}D01*\n")
-        f.write("G37*\n")
-        f.write("%LPC*%\n")
-        pwr_nets = {"+12V_RAW", "+12V_BATT", "+12V_SWITCHED", "+5V_PI5", "+3V3_ALWAYS_ON", "+3V3_SENSORS"}
-        for hx, hy, diam, is_gnd, net_name in drill_holes:
-            if net_name not in pwr_nets:
-                dcode = get_ap("C", diam + 0.80)
-                f.write(f"D{dcode}*\nX{fmt_coord(hx)}Y{fmt_coord(hy)}D03*\n")
+        for zone_net, zx1, zy1, zx2, zy2 in in2_power_zones:
+            f.write("%LPD*%\n")
+            f.write("G36*\n")
+            f.write(f"X{fmt_coord(zx1)}Y{fmt_coord(zy1)}D02*\n")
+            f.write(f"X{fmt_coord(zx2)}Y{fmt_coord(zy1)}D01*\n")
+            f.write(f"X{fmt_coord(zx2)}Y{fmt_coord(zy2)}D01*\n")
+            f.write(f"X{fmt_coord(zx1)}Y{fmt_coord(zy2)}D01*\n")
+            f.write(f"X{fmt_coord(zx1)}Y{fmt_coord(zy1)}D01*\n")
+            f.write("G37*\n")
+            f.write("%LPC*%\n")
+            for hx, hy, diam, is_gnd, net_name in drill_holes:
+                r_clear = (diam + 0.80) / 2.0
+                if (zx1 - r_clear) <= hx <= (zx2 + r_clear) and (zy1 - r_clear) <= hy <= (zy2 + r_clear):
+                    if net_name != zone_net:
+                        dcode = get_ap("C", diam + 0.80)
+                        f.write(f"D{dcode}*\nX{fmt_coord(hx)}Y{fmt_coord(hy)}D03*\n")
         f.write("%LPD*%\n")
         f.write("M02*\n")
 
@@ -743,6 +751,18 @@ def generate_all(base_dir):
         # Ground Vias
         for vx, vy in gnd_vias:
             f.write(f'  (via (at {vx:.3f} {vy:.3f}) (size 0.65) (drill 0.35) (layers "F.Cu" "B.Cu") (net 1))\n')
+
+        # In1.Cu Solid GND Zone
+        f.write('  (zone (net 1) (net_name "GND") (layer "In1.Cu") (hatch edge 0.508)\n')
+        f.write('    (connect_pads (clearance 0.4))\n')
+        f.write('    (polygon (pts (xy 2.0 2.0) (xy 98.0 2.0) (xy 98.0 78.0) (xy 2.0 78.0)))\n  )\n')
+
+        # In2.Cu Isolated Split Power Plane Zones (non-overlapping, >= 2.0mm separation)
+        for zone_net, zx1, zy1, zx2, zy2 in in2_power_zones:
+            znid = net_id_map.get(zone_net, 0)
+            f.write(f'  (zone (net {znid}) (net_name "{zone_net}") (layer "In2.Cu") (hatch edge 0.508)\n')
+            f.write('    (connect_pads (clearance 0.4))\n')
+            f.write(f'    (polygon (pts (xy {zx1:.1f} {zy1:.1f}) (xy {zx2:.1f} {zy1:.1f}) (xy {zx2:.1f} {zy2:.1f}) (xy {zx1:.1f} {zy2:.1f})))\n  )\n')
 
         f.write(')\n')
 

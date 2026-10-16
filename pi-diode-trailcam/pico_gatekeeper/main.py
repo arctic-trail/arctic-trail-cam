@@ -205,12 +205,51 @@ def init_sensors():
         sensor_health["seis"] = False
 
     # Discover optional Melexis MLX90640 Passive LWIR Thermal Array (0x33) for 0.00W RF EMCON
-    sensor_health["lwir"] = (MLX90640_ADDR in devices)
+    if MLX90640_ADDR in devices:
+        sensor_health["lwir"] = _validate_mlx90640_alive()
+    else:
+        sensor_health["lwir"] = False
 
     # Discover optional BME280 Ambient Temp/Humidity Sensor (0x76 / 0x77) for Frost-Point De-Icer Gating
-    sensor_health["env"] = (BME280_ADDR in devices) or (0x77 in devices)
+    if (BME280_ADDR in devices) or (0x77 in devices):
+        bme_addr = BME280_ADDR if (BME280_ADDR in devices) else 0x77
+        try:
+            # Configure ctrl_hum (0xF2 = 0x01 1x oversampling) and ctrl_meas (0xF4 = 0x27)
+            i2c.writeto_mem(bme_addr, 0xF2, b"\x01")
+            i2c.writeto_mem(bme_addr, 0xF4, b"\x27")
+            sensor_health["env"] = True
+        except Exception:
+            sensor_health["env"] = False
+    else:
+        sensor_health["env"] = False
 
     return sensor_health["mag"] or sensor_health["seis"] or sensor_health["lwir"]
+
+
+def _i2c_read_mem16(dev_addr, reg16, nbytes):
+    """Reads `nbytes` from a 16-bit register address (`addrsize=16`) such as MLX90640 RAM."""
+    try:
+        return i2c.readfrom_mem(dev_addr, reg16, nbytes, addrsize=16)
+    except TypeError:
+        # Fallback for simplified mock I2C objects in unit tests that omit addrsize kwarg
+        if hasattr(i2c, "writeto") and hasattr(i2c, "readfrom"):
+            i2c.writeto(dev_addr, struct.pack(">H", reg16), False)
+            return i2c.readfrom(dev_addr, nbytes)
+        return i2c.readfrom_mem(dev_addr, reg16, nbytes)
+
+
+def _validate_mlx90640_alive():
+    """Verifies MLX90640 responds at 16-bit pixel RAM address 0x0400 with non-zero, non-stuck words."""
+    try:
+        raw = _i2c_read_mem16(MLX90640_ADDR, 0x0400, 16)
+        if not raw or len(raw) < 16:
+            return False
+        vals = struct.unpack(">8h", raw[:16])
+        if all(v == 0 for v in vals) or all(v == -1 for v in vals):
+            return False
+        return True
+    except Exception:
+        return False
 
 
 def zeroize_ephemeral_key_on_tamper():
@@ -228,19 +267,51 @@ def zeroize_ephemeral_key_on_tamper():
 def read_mlx90640_thermal_contrast_c():
     """
     Reads peak-to-median thermal contrast (in deg C) from a passive MLX90640 (0x33)
-    32x24 far-infrared subarray on I2C0 without emitting any RF or IR photons (0.00W RF).
+    32x24 far-infrared subarray on I2C0 using 16-bit register addressing (addrsize=16)
+    without emitting any RF or IR photons (0.00W RF).
+    If the sensor fails or returns stuck all-zero/0xFFFF data, marks sensor_health['lwir']=False
+    and returns None so the gatekeeper falls back to magnetic/seismic/radar sensing.
     """
     if not sensor_health.get("lwir", False):
-        return 0.0
+        return None
     try:
-        raw = i2c.readfrom_mem(MLX90640_ADDR, 0x0400, 16)
-        vals = struct.unpack('>8h', raw)
+        raw = _i2c_read_mem16(MLX90640_ADDR, 0x0400, 16)
+        if not raw or len(raw) < 16:
+            sensor_health["lwir"] = False
+            return None
+        vals = struct.unpack(">8h", raw[:16])
+        if all(v == 0 for v in vals) or all(v == -1 for v in vals):
+            sensor_health["lwir"] = False
+            return None
         ambient_raw = sum(vals) // len(vals)
         peak_raw = max(vals)
         # Convert raw IR counts to approximate surface temperature delta (deg C)
         return round(max(0.0, (peak_raw - ambient_raw) * 0.125), 2)
     except Exception:
-        return 0.0
+        sensor_health["lwir"] = False
+        return None
+
+
+def read_bme280_humidity_pct():
+    """
+    Reads ambient relative humidity (% RH) from an optional BME280 (0x76 / 0x77) on I2C0
+    to gate the 3.6W window de-icer in dry sub-zero conditions. Returns None if absent.
+    """
+    if not sensor_health.get("env", False):
+        return None
+    for addr in (BME280_ADDR, 0x77):
+        try:
+            raw = i2c.readfrom_mem(addr, 0xFD, 2)
+            if raw and len(raw) == 2:
+                adc_h = (raw[0] << 8) | raw[1]
+                if adc_h in (0, 0x8000, 0xFFFF):
+                    return None
+                # Linearized uncalibrated/default BME280 ADC humidity mapping (0..100% RH)
+                rh = max(5.0, min(100.0, (adc_h / 512.0)))
+                return round(rh, 1)
+        except Exception:
+            pass
+    return None
 
 
 def should_enable_lens_deicer(temp_c, rh_pct=None):
@@ -262,20 +333,61 @@ def should_enable_lens_deicer(temp_c, rh_pct=None):
     return (temp_c - dew_point_c) <= 2.5
 
 
-def capture_spi_instant_frame():
+INSTANT_SNAP_BUF = bytearray(256)
+
+
+def capture_spi_instant_frame(spi_bus=None):
     """
     Triggers an immediate <150ms first-frame snapshot on an optional Arducam Mega SPI
-    or HM01B0 camera wired directly to the Pico 2 at t=0.0s while the Pi 5 cold-boots.
-    Eliminates the 6.8s cold-boot blind spot for fast-moving snowmobiles/skiers/ATVs.
+    or HM01B0 camera wired directly to the Pico 2 (CS=GP13) at t=0.0s while the Pi 5 cold-boots.
+    Reads the Arducam FIFO length registers (0x42..0x44) and bursts the initial header/frame
+    bytes into `INSTANT_SNAP_BUF`, returning the captured frame byte count.
     """
     global last_instant_snap_len
     try:
+        if spi_bus is None:
+            try:
+                from machine import SPI
+                spi_bus = SPI(1, baudrate=4000000, polarity=0, phase=0)
+            except Exception:
+                spi_bus = None
+
         SPI_CAM_CS.value(0)
-        time.sleep_us(50)
+        time.sleep_us(20)
+        if spi_bus is not None:
+            # 1. Arducam ARDUCHIP_FIFO (0x04 | 0x80 = 0x84): clear FIFO (0x01) + start capture (0x02)
+            spi_bus.write(b"\x84\x03")
+            SPI_CAM_CS.value(1)
+            time.sleep_ms(5)
+            # 2. Read 24-bit FIFO size from registers 0x42, 0x43, 0x44
+            fifo_len = 0
+            for shift, reg in ((0, 0x42), (8, 0x43), (16, 0x44)):
+                SPI_CAM_CS.value(0)
+                spi_bus.write(bytes([reg]))
+                b_val = spi_bus.read(1)
+                SPI_CAM_CS.value(1)
+                if b_val:
+                    fifo_len |= (b_val[0] << shift)
+            if 0 < fifo_len <= 524288:
+                # 3. Burst read initial header/thumbnail slice from BURST_FIFO_READ (0x3C)
+                SPI_CAM_CS.value(0)
+                spi_bus.write(b"\x3C")
+                read_len = min(len(INSTANT_SNAP_BUF), fifo_len)
+                snap_head = spi_bus.read(read_len)
+                SPI_CAM_CS.value(1)
+                if snap_head:
+                    INSTANT_SNAP_BUF[:len(snap_head)] = snap_head
+                last_instant_snap_len = fifo_len
+                return last_instant_snap_len
         SPI_CAM_CS.value(1)
         return last_instant_snap_len
     except Exception:
+        try:
+            SPI_CAM_CS.value(1)
+        except Exception:
+            pass
         return 0
+
 
 def read_magnetometer():
     """Reads 3-axis magnetic vector magnitude |Bx| + |By| + |Bz|."""
@@ -288,6 +400,7 @@ def read_magnetometer():
     except Exception:
         recover_i2c_bus()
         return 0
+
 
 def read_seismic_rms(samples=SEIS_SAMPLE_COUNT):
     """Samples differential ground particle velocity from ADS1115."""
@@ -307,6 +420,7 @@ def read_seismic_rms(samples=SEIS_SAMPLE_COUNT):
         recover_i2c_bus()
         return 0
 
+
 def _decode_ld2450_signed16(raw_u16):
     """
     HLK-LD2450 encodes signed 16-bit integers in sign-magnitude format:
@@ -316,11 +430,67 @@ def _decode_ld2450_signed16(raw_u16):
     mag = raw_u16 & 0x7FFF
     return mag if (raw_u16 & 0x8000) else -mag
 
+
+LD2450_HEADER = b"\xAA\xFF\x03\x00"
+LD2450_FOOTER = b"\x55\xCC"
+LD2450_FRAME_LEN = 30
+
+
+def parse_ld2450_buffer(rx_buf):
+    """
+    Scans `rx_buf` for complete 30-byte HLK-LD2450 frames:
+      - Bytes 0..3:   Header `0xAA 0xFF 0x03 0x00`
+      - Bytes 4..11:  Target 1 (x_u16, y_u16, spd_u16, res_u16)
+      - Bytes 12..19: Target 2 (x_u16, y_u16, spd_u16, res_u16)
+      - Bytes 20..27: Target 3 (x_u16, y_u16, spd_u16, res_u16)
+      - Bytes 28..29: Footer `0x55 0xCC`
+    Evaluates all 3 target slots and returns `(dist_mm, speed_cms, remaining_buf)`.
+    Preserves partial frames across split UART reads and rejects false `AA FF` occurrences.
+    """
+    search_idx = 0
+    n = len(rx_buf)
+    while search_idx <= n - 4:
+        hdr_idx = rx_buf.find(LD2450_HEADER, search_idx)
+        if hdr_idx == -1:
+            # Keep last 3 bytes in case 4-byte header was split across UART read boundary
+            return 0, 0, rx_buf[max(search_idx, n - 3):]
+
+        if n - hdr_idx < LD2450_FRAME_LEN:
+            # Complete 30-byte frame has not finished arriving yet; retain from hdr_idx
+            return 0, 0, rx_buf[hdr_idx:]
+
+        frame = rx_buf[hdr_idx:hdr_idx + LD2450_FRAME_LEN]
+        if frame[28:30] != LD2450_FOOTER:
+            # False header match in payload/noise; advance past hdr_idx and keep scanning
+            search_idx = hdr_idx + 2
+            continue
+
+        # Valid 30-byte frame: inspect all 3 target slots (offsets 4, 12, 20)
+        best_dist = 0
+        best_spd = 0
+        for slot_off in (4, 12, 20):
+            x_u16, y_u16, spd_u16 = struct.unpack("<HHH", frame[slot_off:slot_off + 6])
+            x_mm = _decode_ld2450_signed16(x_u16)
+            y_mm = _decode_ld2450_signed16(y_u16)
+            spd = _decode_ld2450_signed16(spd_u16)
+            dist_mm = int((x_mm * x_mm + y_mm * y_mm) ** 0.5)
+            if dist_mm > 500:
+                if best_dist == 0 or abs(spd) > abs(best_spd):
+                    best_dist = dist_mm
+                    best_spd = spd
+
+        search_idx = hdr_idx + LD2450_FRAME_LEN
+        if best_dist > 500:
+            return best_dist, best_spd, rx_buf[search_idx:]
+
+    return 0, 0, rx_buf[search_idx:]
+
+
 def check_ld2450_radar(wdt=None, listen_ms=1200):
     """
     Powers 24 GHz Doppler radar briefly (GP6=1) to confirm moving target range & speed.
-    Scans stream for frame header (0xAA 0xFF 0x03 0x00) to prevent byte-slip misalignment
-    and feeds hardware watchdog during sample acquisition.
+    Scans stream for complete 30-byte frames (header 0xAA 0xFF 0x03 0x00 + footer 0x55 0xCC)
+    across all 3 target slots and feeds hardware watchdog during sample acquisition.
     """
     RADAR_PWR.value(1)
     time.sleep_ms(250)
@@ -337,25 +507,18 @@ def check_ld2450_radar(wdt=None, listen_ms=1200):
             chunk = radar_uart.read(min(avail, 64))
             if chunk:
                 rx_buf += chunk
-                if len(rx_buf) > 128:
-                    rx_buf = rx_buf[-64:]
-                hdr_idx = rx_buf.find(b"\xAA\xFF")
-                if hdr_idx != -1 and len(rx_buf) >= hdr_idx + 29:
-                    frame = rx_buf[hdr_idx:hdr_idx + 29]
-                    rx_buf = rx_buf[hdr_idx + 29:]
-                    x_u16, y_u16, spd_u16 = struct.unpack('<HHH', frame[4:10])
-                    x_mm = _decode_ld2450_signed16(x_u16)
-                    y_mm = _decode_ld2450_signed16(y_u16)
-                    spd = _decode_ld2450_signed16(spd_u16)
-                    dist_mm = int((x_mm * x_mm + y_mm * y_mm) ** 0.5)
-                    if dist_mm > 500:
-                        target_dist_mm = dist_mm
-                        target_speed_cms = spd
-                        break
+                dist_mm, spd_cms, rx_buf = parse_ld2450_buffer(rx_buf)
+                if len(rx_buf) > 180:
+                    rx_buf = rx_buf[-60:]
+                if dist_mm > 500:
+                    target_dist_mm = dist_mm
+                    target_speed_cms = spd_cms
+                    break
         time.sleep_ms(15)
 
     RADAR_PWR.value(0)
     return target_dist_mm, target_speed_cms
+
 
 # ==============================================================================
 # 5. Cold-Boot & Parallel De-Icing Handoff State Machine
@@ -366,9 +529,12 @@ def _set_deice_heater(state):
     if DEICE_HEATER_ALT:
         DEICE_HEATER_ALT.value(1 if state else 0)
 
+
 def trigger_deicing_if_subzero(wdt=None, duration_ms=4000, rh_pct=None):
     """Standalone helper pulsing the PTC lens heater ring if frost/dew conditions are met."""
     temp_c = read_rp2040_temperature_c()
+    if rh_pct is None:
+        rh_pct = read_bme280_humidity_pct()
     if should_enable_lens_deicer(temp_c, rh_pct=rh_pct):
         _set_deice_heater(True)
         steps = max(1, duration_ms // 500)
@@ -378,6 +544,7 @@ def trigger_deicing_if_subzero(wdt=None, duration_ms=4000, rh_pct=None):
             time.sleep_ms(500)
         _set_deice_heater(False)
     return temp_c
+
 
 def boot_pi5_and_handoff(
     mag_val, mag_base, seismic_val, seis_base,
@@ -390,6 +557,9 @@ def boot_pi5_and_handoff(
     3. Tamper-zeroization flag + monotonic UPTIME_S telemetry streaming and 3-sample debounced DONE.
     """
     STATUS_LED.value(1)
+
+    if rh_pct is None:
+        rh_pct = read_bme280_humidity_pct()
 
     # 1. Immediately Latch Domain B High-Side Power Rail & Snap <150ms SPI Pre-Roll Frame at t = 0.0s
     MOSFET_GATE.value(1)
@@ -409,9 +579,10 @@ def boot_pi5_and_handoff(
 
     uptime_s = max(0, time.ticks_diff(start_ms, BOOT_TICKS_MS) // 1000)
     tamper_flag = 1 if tamper_zeroized else 0
+    rh_str = f",RH={rh_pct}" if rh_pct is not None else ""
     telemetry_line = (
         f"TRIG,MAG={mag_val},MBASE={mag_base},SEIS={seismic_val},SBASE={seis_base},"
-        f"DIST={radar_dist},SPD={radar_spd},TEMP={temp_c},UPTIME_S={uptime_s},"
+        f"DIST={radar_dist},SPD={radar_spd},TEMP={temp_c}{rh_str},UPTIME_S={uptime_s},"
         f"PROFILE={profile},FAST_SNAP={snap_bytes},TAMPER_ZEROIZED={tamper_flag}\n"
     )
 
@@ -451,6 +622,7 @@ def boot_pi5_and_handoff(
             wdt.feed()
         time.sleep(1)
 
+
 # ==============================================================================
 # 6. Main Arctic Gatekeeper Control Loop
 # ==============================================================================
@@ -461,6 +633,7 @@ def evaluate_sensor_step(
     """
     Evaluates a single gatekeeper sensing step across all four supported hardware profiles
     (including 0.00W RF Passive EMCON via MLX90640 LWIR thermal contrast).
+    If MLX90640 faults at runtime, automatically falls back to magnetic/seismic/radar sensing.
     Returns (verified, tier1_tripped, radar_dist, radar_spd).
     """
     mag_delta = abs(current_mag - mag_ema)
@@ -481,6 +654,15 @@ def evaluate_sensor_step(
     if profile == PROFILE_PASSIVE_EMCON_LWIR:
         # Strict 0.00W RF mode: never energize the 24 GHz radar; confirm via passive LWIR thermal contrast
         lwir_dt = read_mlx90640_thermal_contrast_c()
+        if lwir_dt is None:
+            # MLX90640 faulted at runtime: if EMCON_PASSIVE_ONLY is not forced, fall back to standard profile
+            if not EMCON_PASSIVE_ONLY:
+                fallback_prof = PROFILE_FULL_TRIPLE if sensor_health.get("seis") else PROFILE_MAG_RADAR_DUTY
+                return evaluate_sensor_step(
+                    current_mag, mag_ema, current_seis, seis_ema,
+                    fallback_prof, loop_count, multiplier=multiplier, wdt=wdt
+                )
+            lwir_dt = 0.0
         lwir_tripped = lwir_dt >= (LWIR_DELTA_TEMP_C * multiplier)
         if lwir_tripped or (mag_tripped and seis_tripped):
             return True, (tier1_tripped or lwir_tripped), int(lwir_dt * 1000), 0
@@ -492,7 +674,7 @@ def evaluate_sensor_step(
         return verified, True, radar_dist, radar_spd
 
     # In PROFILE_MAG_RADAR_DUTY (no geophone installed yet), perform a brief periodic
-    # radar sniff every RADAR_SNIFF_INTERVAL_LOOPS (~3.0s) to detect non-ferromagnetic
+    # radar sniff every RADAR_SNIFF_INTERVAL_LOOPS to detect non-ferromagnetic
     # humans and wildlife that produce zero magnetic signature.
     if profile == PROFILE_MAG_RADAR_DUTY and (loop_count % RADAR_SNIFF_INTERVAL_LOOPS == 0):
         radar_dist, radar_spd = check_ld2450_radar(wdt=wdt, listen_ms=350)
@@ -549,9 +731,10 @@ def main():
         if tamper_armed and (not tamper_zeroized) and (TAMPER_SWITCH_PIN.value() == 1):
             zeroize_ephemeral_key_on_tamper()
             temp_c = read_rp2040_temperature_c()
+            rh_pct = read_bme280_humidity_pct()
             boot_pi5_and_handoff(
                 mag_ema, mag_ema, seis_ema, seis_ema,
-                0, 0, temp_c, wdt=wdt, profile=active_profile
+                0, 0, temp_c, wdt=wdt, profile=active_profile, rh_pct=rh_pct
             )
 
         # Check if Storm Mode has expired
@@ -580,13 +763,15 @@ def main():
             # Target verified: clear unverified storm counter
             unverified_triggers = []
             temp_c = read_rp2040_temperature_c()
+            rh_pct = read_bme280_humidity_pct()
             boot_pi5_and_handoff(
                 current_mag, mag_ema,
                 current_seis, seis_ema,
                 radar_dist, radar_spd,
                 temp_c,
                 wdt=wdt,
-                profile=active_profile
+                profile=active_profile,
+                rh_pct=rh_pct
             )
             new_mag = read_magnetometer()
             new_seis = read_seismic_rms(16)
@@ -620,3 +805,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

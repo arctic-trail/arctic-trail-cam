@@ -40,29 +40,31 @@ Because every RF component uses threaded `SMA` / `Type-N` coaxial connectors and
 
 | Assembly Phase | Time Required | What You Do |
 | :--- | :---: | :--- |
-| **Phase 1: Transmitter (`TX`) Node RF & Power Assembly** | **`~15 minutes`** | 1. Screw 1× `Amphenol 242125` (`N-Male` to `SMA-Female`) adapter into the back of the TX `L-com HG2414P` panel antenna (`1 min`).<br>2. Thread 1× `Mini-Circuits VBF-2435+` bandpass filter directly onto the output of the `Skyworks SE2576L-EK1` `1W` PA board (`1 min`).<br>3. Connect `ADALM-PLUTO #1 TX` $\rightarrow$ `SE2576L-EK1 RFIN` using `RG-142 SMA Jumper #1`, and `VBF-2435+ OUT` $\rightarrow$ `HG2414P Antenna` using `RG-142 SMA Jumper #2` (`3 min`).<br>4. Connect `+5.0V` and `GND` from `TDK-Lambda LS50-5 #1` screw terminals to the `SE2576L-EK1` (`VCC`/`PA_EN` & `GND`) and `Pico 2 H #1`, and place the PA + filter inside the `Hammond 1590Z120 #1` cast-aluminum shield box (`10 min`). |
-| **Phase 2: Receiver (`RX`) Node RF & Power Assembly** | **`~15 minutes`** | 1. Screw 1× `Amphenol 242125` (`N-Male` to `SMA-Female`) adapter into the back of the RX `L-com HG2414P` panel antenna (`1 min`).<br>2. Thread 1× `Mini-Circuits VBF-2435+` bandpass filter **directly onto the input** (`RFIN`) of the `Skyworks SKY65405-21EK1` LNA board so out-of-band signals are blocked before the LNA (`1 min`).<br>3. Connect `HG2414P Antenna` $\rightarrow$ `VBF-2435+ IN` using `RG-142 SMA Jumper #3`, and `SKY65405-21EK1 RFOUT` $\rightarrow$ `ADALM-PLUTO #2 RX` using `RG-142 SMA Jumper #4` (`3 min`).<br>4. Connect `+5.0V` and `GND` from `TDK-Lambda LS50-5 #2` screw terminals to the `SKY65405-21EK1` (`VDD`/`VEN` & `GND`) and `Pico 2 H #2`, and place the filter + LNA inside `Hammond 1590Z120 #2` (`10 min`). |
+| **Phase 1: Transmitter (`TX`) Node RF & Power Assembly** | **`~15 minutes`** | 1. Screw 1× `Amphenol 242125` (`N-Male` to `SMA-Female`) adapter into the back of the TX `L-com HG2414P` panel antenna (`1 min`).<br>2. Thread 1× `Mini-Circuits VBF-2435+` bandpass filter directly onto the output of the `Skyworks SE2576L-EK1` `1W` PA board (`1 min`).<br>3. Connect `ADALM-PLUTO #1 TX` $\rightarrow$ `SE2576L-EK1 RFIN` using `RG-142 SMA Jumper #1`, and `VBF-2435+ OUT` $\rightarrow$ `HG2414P Antenna` using `RG-142 SMA Jumper #2` (`3 min`).<br>4. Connect `+5.0V` and `GND` from `TDK-Lambda LS50-5 #1` screw terminals to `SE2576L-EK1 VCC` (`+5.0V` collector rail only) and `Pico 2 H #1 VSYS` (`Pin 39`). Wire `SE2576L-EK1 PA_EN` (`C0`/`C1` logic enable, **`3.6 V` absolute max — NEVER `+5.0V`!**) strictly to **`Pico 2 H #1 GP3` (`Pin 5`, `3.3 V` logic)**, and place the PA + filter inside the `Hammond 1590Z120 #1` cast-aluminum shield box (`10 min`). |
+| **Phase 2: Receiver (`RX`) Node RF & Power Assembly** | **`~15 minutes`** | 1. Screw 1× `Amphenol 242125` (`N-Male` to `SMA-Female`) adapter into the back of the RX `L-com HG2414P` panel antenna (`1 min`).<br>2. Thread 1× `Mini-Circuits VBF-2435+` bandpass filter **directly onto the input** (`RFIN`) of the `Skyworks SKY65405-21EK1` LNA board so out-of-band signals are blocked before the LNA (`1 min`).<br>3. Connect `HG2414P Antenna` $\rightarrow$ `VBF-2435+ IN` using `RG-142 SMA Jumper #3`, and `SKY65405-21EK1 RFOUT` $\rightarrow$ `ADALM-PLUTO #2 RX` using `RG-142 SMA Jumper #4` (`3 min`).<br>4. Connect `+5.0V` and `GND` from `TDK-Lambda LS50-5 #2` screw terminals to `SKY65405-21EK1 VDD` (`+5.0V` supply rail only) and `Pico 2 H #2 VSYS` (`Pin 39`). Wire `SKY65405-21EK1 VEN` (LNA active-bias enable, **`2.8 V` nominal / `3.5 V` max — NEVER `+5.0V`!**) strictly to **`Pico 2 H #2 3V3_OUT` (`Pin 36`, `3.3 V` regulated rail)**, and place the filter + LNA inside `Hammond 1590Z120 #2` (`10 min`). |
 | **Phase 3: USB Connection & Software Self-Test** | **`~10 minutes`** | Plug the USB cables of `ADALM-PLUTO #1/#2` and `Pico 2 H #1/#2` into the sender and collector hosts, run `python3 -B sky-diode-relay/tests/test_sky_relay_simulation.py`, and verify the first `SKFG` frame lock. |
 | **Total Build Time (Both Nodes)** | **`35 – 45 minutes`** | **100% plug-and-play coaxial & screw-terminal assembly.** |
 
 > [!CAUTION]
-> **One Golden Rule Before Applying `+5.0V` Power to the Transmitter (`SE2576L-EK1`):**
-> Always screw the `HG2414P` antenna (or a `50 Ω` load) onto the `SE2576L-EK1` output **before** turning on the `LS50-5` `+5.0V` supply or transmitting from `ADALM-PLUTO #1`. Never fire a `+30 dBm` (`1 W`) RF power amplifier into an open, disconnected `SMA` jack.
+> **Two Golden Rules Before Applying `+5.0V` Power (`SE2576L-EK1` & `SKY65405-21EK1`):**
+> 1. **Always Connect the `50 Ω` Antenna Load First:** Screw the `HG2414P` antenna (or a `50 Ω` load) onto the `SE2576L-EK1` output **before** turning on the `LS50-5` `+5.0V` supply or asserting `PA_EN`. Never fire a `+30 dBm` (`1 W`) RF power amplifier into an open, disconnected `SMA` jack.
+> 2. **`PA_EN` (`C0`/`C1`) and `VEN` Are `3.3 V` Logic Pins (`3.6 V` Max — NEVER Connect to `+5.0 V`!):** On the `Skyworks SE2576L-EK1` PA, only the main `VCC` rail takes `+5.0 V`; its logic enable pins (`PA_EN` / `C0` & `C1`, datasheet `1.8–3.3 V` operating, `3.6 V` abs max) MUST be driven from **`Pico 2 H #1 GP3` (`3.3 V` GPIO)**. Likewise, on the `Skyworks SKY65405-21EK1` LNA, `VDD` takes `+5.0 V`, while `VEN` (`2.8 V` typ / `3.5 V` max) MUST be wired to **`Pico 2 H #2 Pin 36` (`3V3_OUT`, `3.3 V`)**. Tying `PA_EN` or `VEN` directly to `+5.0 V` will permanently damage the CMOS bias controller.
 
 ---
 
 ## 3. Exact Coaxial & DC Pinout Schedule (`Build D`)
 
-### 3.1 Transmitter (`TX`) Chain (`+43.5 dBm` EIRP across `2380 / 2488 / 2459 MHz`)
+### 3.1 Transmitter (`TX`) Chain (`+42.5 dBm` EIRP across `2380 / 2488 / 2459 MHz`)
 ```
 [Raspberry Pi 5 / Pico 2 H #1 (SC1632)]
-       │ USB / UART (SKFG FEC + Keyed-FHSS Schedule: 2380.373 / 2487.818 / 2459.116 MHz)
+       │ • USB / UART (SKFG FEC + Keyed-FHSS Schedule: 2380.373 / 2487.818 / 2459.116 MHz)
+       │ • Pico 2 H #1 GP3 (Pin 5, 3.3V CMOS Logic) ──► SE2576L-EK1 PA_EN (C0/C1, 3.6V Max — NEVER +5.0V!)
        ▼
-[Analog Devices ADALM-PLUTO #1] ──(TX Out: -3.0 dBm, SMA-F)
+[Analog Devices ADALM-PLUTO #1] ──(TX Out: +2.0 dBm Licensed / +7.5 dBm Civilian, SMA-F)
        │
        │ Cinch Johnson 415-0029-012 (12" RG-142 SMA-M to SMA-M Jumper #1)
        ▼
-[Skyworks SE2576L-EK1 1W PA] ──(Powered by TDK-Lambda LS50-5 #1: +5.0V to VCC & PA_EN, GND to GND)
+[Skyworks SE2576L-EK1 1W PA] ──(VCC: +5.0V from LS50-5 #1 | PA_EN: 3.3V from Pico 2 GP3 | GND: Common GND)
        │ RFOUT (+30.0 dBm / 1.0 W, SMA-F)
        ▼ (Direct SMA-M to SMA-F Thread)
 [Mini-Circuits VBF-2435+ Bandpass Filter (2370–2500 MHz)]
@@ -73,7 +75,7 @@ Because every RF component uses threaded `SMA` / `Type-N` coaxial connectors and
 [Amphenol RF 242125 (SMA-F to N-Male Adapter #1)]
        │
        ▼
-[L-com HG2414P 14.0 dBi Outdoor Flat Patch Panel Antenna #1] ──► +43.5 dBm EIRP (30° × 30° Beam, +2° Tilt)
+[L-com HG2414P 14.0 dBi Outdoor Flat Patch Panel Antenna #1] ──► +42.5 dBm EIRP (30° × 30° Beam, +2° Tilt)
 ```
 
 ### 3.2 Receiver (`RX`) Chain (`1.2 dB` Noise Figure, `+55.8 dB` Coherent Lock-In Gain)
@@ -88,7 +90,7 @@ Because every RF component uses threaded `SMA` / `Type-N` coaxial connectors and
 [Mini-Circuits VBF-2435+ Bandpass Filter (2370–2500 MHz)] ──(Blocks Out-of-Band Jammers BEFORE LNA!)
        │ Filter Out (SMA-M)
        ▼ (Direct SMA-M to SMA-F Thread)
-[Skyworks SKY65405-21EK1 Ultra-Low-Noise Amplifier] ──(Powered by TDK-Lambda LS50-5 #2: +5.0V to VDD/VEN)
+[Skyworks SKY65405-21EK1 Ultra-Low-Noise Amplifier] ──(VDD: +5.0V from LS50-5 #2 | VEN: 3.3V from Pico 2 Pin 36 3V3_OUT — NEVER +5.0V!)
        │ RFOUT (+15.0 dB Gain, 1.2 dB NF, +29 dBm OIP3)
        │
        │ Cinch Johnson 415-0029-012 (12" RG-142 SMA-M to SMA-M Jumper #4)

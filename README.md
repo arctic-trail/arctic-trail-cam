@@ -48,16 +48,16 @@ Standalone cutaway plates for **Device 1 (`Zone 1` Camera/Radar Pod)**, **Device
 ### 2.1 The 3-Zone Covert Split-Pod Camera Unit on a Forest Pine Tree
 ![3-Zone Covert Split-Pod Field Camera Unit in Context](pi-diode-trailcam/docs/images/product_units_in_context.jpg)
 
-* **Zone 1 (Top — `2.0 m` High in Pine Bark Crevice):** Fist-sized `Hammond 1591BSBK` (`112 × 62 × 31 mm`) pod with **only one circular `28 mm` glass window** (`IMX708` camera + black neoprene foam anti-glare baffle + `2× 940 nm` stealth IR LEDs + `33-Ohm` de-icer) and an internal `HLK-LD2450` `24 GHz` radar shooting cleanly through the solid, uncut lower ABS wall.
-* **Zone 2 (Middle — `2.0 m` Trunk Cord):** Thin `6 mm` umbilical wrapped in `Gear Aid Camo Form` matte bark tape tucked into a natural vertical bark groove.
-* **Zone 3 (Bottom — Buried Under Forest Moss at Roots):** Waterproof `QILIPSU IP67` (`285 × 195 × 130 mm`) vault housing the wall-to-wall `12V 12Ah` battery (`[P17]`), `Pico 2` Gatekeeper (`[P07]`), `5V` buck/relay power switch (`[P12]`), `Raspberry Pi 5` (`[P01]`), and `1310 nm` `StarTech` Media Converter + `1×2` Optical Splitter Diode (`[P13]`–`[P15]`).
+* **Zone 1 (Top — `2.0 m` High in Pine Bark Crevice):** Fist-sized `Hammond 1591BSBK` (`112 × 62 × 31 mm`, factory `IP54` sealed with a perimeter `Permatex 81158` lid-channel gasket, or drop-in `Hammond 1554EGY` factory `IP68`) pod with **only one circular `28 mm` glass window** (`IMX708` camera + black neoprene foam anti-glare baffle + `2× 940 nm` stealth IR LEDs + `39-Ohm 5W` [`3.69 W` @ `12V`] de-icer) and an internal `HLK-LD2450` `24 GHz` radar shooting cleanly through the solid, uncut lower ABS wall.
+* **Zone 2 (Middle — `2.0 m` Trunk Cord):** Shielded `Arducam CSI-to-HDMI` (`2.0 m`) + 4-wire radar/heater umbilical wrapped in `Gear Aid Camo Form` matte bark tape tucked into a natural vertical bark groove.
+* **Zone 3 (Bottom — Buried Under Forest Moss at Roots):** Waterproof `QILIPSU IP67` (`285 × 195 × 130 mm`) vault housing the wall-to-wall `12V 12Ah` battery (`[P17]`), `Pico 2` Gatekeeper (`[P07]`), `5V` buck/relay power switches (`[P12]`), `Raspberry Pi 5` (`[P01]`), and `1310 nm` `StarTech` Media Converter + `1×2` Optical Splitter Diode (`[P13]`–`[P15]`).
 
 ### 2.2 The `200 m – 20 km` Non-Line-of-Sight Troposcatter & Water-Crossing Beam System ([`sky-diode-relay`](sky-diode-relay/README.md))
 ![200 m – 20 km All-Weather Troposcatter & Canopy-Bounce System in Context](sky-diode-relay/docs/images/sky_diode_beam_system_in_context.jpg)
 
 ![Pin-Accurate Engineering Blueprint & Ordered 10-Line DigiKey BOM](sky-diode-relay/docs/images/sky_relay_20km_troposcatter_blueprint.png)
 
-* **Ordered Production Baseline (`Build D` — `200 m to 20 km` All-Weather `2.4 GHz` Troposcatter, Hydrometeor & Canopy-Bounce Relay, `$1,341.94` parts subtotal, `~35–45 min` zero-solder assembly):** Uses **Analog Devices `ADALM-PLUTO` SDRs**, a **Skyworks `SE2576L-EK1` `1.0 W` (`+30 dBm`) PA**, a **Skyworks `SKY65405-21EK1` (`1.2 dB NF`) LNA**, **Mini-Circuits `VBF-2435+` (`2370–2500 MHz`) coaxial bandpass filters**, and **L-com `HG2414P` (`14 dBi`) outdoor flat-panel antennas** to bounce `VK7MO` coherent lock-in frames (`+55.8 dB` processing gain) off lower-troposphere refractivity gradients, rain/snow clouds, and forest canopies over granite hills (`+14.1 dB` to `+62.3 dB` SNR across all 5 Finnish weather regimes). Protected by a **6-layer electronic anti-jamming stack** that hops into out-of-ISM guard bands (`2380.373 MHz` & `2487.818 MHz`) outside consumer Wi-Fi/drone jammers.
+* **Ordered Production Baseline (`Build D` — `200 m to 20 km` All-Weather `2.4 GHz` Troposcatter, Hydrometeor & Canopy-Bounce Relay, `$1,341.94` parts subtotal, `~35–45 min` zero-solder assembly):** Uses **Analog Devices `ADALM-PLUTO` SDRs**, a **Skyworks `SE2576L-EK1` `1.0 W` (`+30 dBm`) PA (`PA_EN` driven strictly at `3.3 V` from `Pico 2 GP3`)**, a **Skyworks `SKY65405-21EK1` (`1.2 dB NF`) LNA (`VEN` driven strictly at `3.3 V` from `Pico 2 3V3_OUT`)**, **Mini-Circuits `VBF-2435+` (`2370–2500 MHz`) coaxial bandpass filters**, and **L-com `HG2414P` (`14 dBi`) outdoor flat-panel antennas** to bounce `VK7MO` coherent lock-in frames (`+55.8 dB` processing gain) off lower-troposphere refractivity gradients, rain/snow clouds, and forest canopies over granite hills (`+14.1 dB` to `+62.3 dB` SNR across all 5 Finnish weather regimes). Protected by a **6-layer electronic anti-jamming stack** that hops into out-of-ISM guard bands (`2380.373 MHz` & `2487.818 MHz`) outside consumer Wi-Fi/drone jammers.
   * **⚠️ Regulatory Disclaimer & `--civilian-eu-compliant` Software Flag (Zero Hardware Changes):** Operating `Build D` at full `1.0 W` (`+42.5 dBm` / `17.8 W` EIRP) or hopping into out-of-ISM guard bands (`2370–2400 MHz` / `2483.5–2500 MHz`) **requires a Traficom experimental/test radio license, defence/border authority authorization, or Amateur Radio permit (`13 cm` band, `2300–2450 MHz`)**. For **license-exempt peacetime civilian operation** under Traficom Regulation 15 / EU ETSI EN 300 328, pass **`--civilian-eu-compliant`** (`civilian_eu_compliant=True`) to `sky_transmitter.py` and `sky_receiver.py`: this restricts all FHSS carrier hops strictly inside **`2400.0–2483.5 MHz`** (`2402–2480 MHz`) and disables/attenuates the PA (`pa_gate_gp3=0`, `+7.5 dBm` SDR output) so total radiated power is capped at **`<= +20.0 dBm` (`100 mW` EIRP)** while still bridging multi-kilometer NLOS forest paths via `VK7MO`'s `+55.8 dB` coherent processing gain.
 * **Short-Range Optical Beam (`Scenario B2` — `10 m to 100 m` Across a Lake Strait or Road):** Two shore-mounted `1310 nm` fiber lens collimators (**Thorlabs `F220FC-1310`**) convert the fiber signal into a pencil-thin, invisible infrared laser beam across water channels where boats or winter ice prevent laying cable (with optical reference builds `A/B/C` also supported in [`sky-diode-relay`](sky-diode-relay/README.md)).
 
@@ -90,7 +90,7 @@ Every document in this repository owns **one distinct responsibility** with zero
 | Document | Single-Source-of-Truth (`SSOT`) Responsibility |
 | :--- | :--- |
 | **[`ARCTIC_TRAIL_CAM_EXECUTIVE_OVERVIEW.pdf`](ARCTIC_TRAIL_CAM_EXECUTIVE_OVERVIEW.pdf)** | **6-Page Plain-English Visual Overview Deck** (non-technical summary with cover page, tree unit in context, and `200 m – 20 km` Troposcatter & Canopy-Bounce system). |
-| **[`ARCTIC_TRAIL_CAM_BUILD_AND_FIELD_GUIDE.pdf`](ARCTIC_TRAIL_CAM_BUILD_AND_FIELD_GUIDE.pdf)** | **Illustrated Master Build Booklet** (compiled printable PDF of Stages 1–6 + 1:1 drilling templates). |
+| **[`ARCTIC_TRAIL_CAM_BUILD_AND_FIELD_GUIDE.pdf`](ARCTIC_TRAIL_CAM_BUILD_AND_FIELD_GUIDE.pdf)** | **Illustrated Master Build Booklet** (compiled printable PDF of Stages 1–6 + 1:1 vector drilling templates). |
 | **[`HARDWARE_SPECS_AND_BOM.md`](pi-diode-trailcam/docs/HARDWARE_SPECS_AND_BOM.md)** | **Parts (`[P01]`–`[P22]`), Tools (`[T01]`–`[T12]`), Retail Prices, Seasonal Battery Life Models & 5-Hole Drilling Schedule.** |
 | **[`BENCHTOP_QUICKSTART_GUIDE.md`](pi-diode-trailcam/docs/BENCHTOP_QUICKSTART_GUIDE.md)** | **IKEA Manual Part 1 (`Stages 1–3`):** Indoor board ID, `✓/✗` orientation rules, SD/Pico flashing, breadboard wiring (`W1`–`W7`), and optical diode test. |
 | **[`ASSEMBLY_GUIDE.md`](pi-diode-trailcam/docs/ASSEMBLY_GUIDE.md)** | **IKEA Manual Part 2 (`Stages 4–6`):** Enclosure hole-saw drilling, glass sealing, bark camo painting, `12V` battery wiring, tree mounting & air-shipping guide. |
@@ -105,17 +105,20 @@ Every document in this repository owns **one distinct responsibility** with zero
 
 ---
 
-## 5. Automated Verification Suites (`100/100` Tests Passing)
+## 5. Automated Software, Protocol, DRC & Channel Simulation Suites
+
+*(Note: These automated suites validate software state machines, `Ed25519` cryptography, durable disk persistence, pagination, PCB DRC geometry, and Monte-Carlo channel models in deterministic software simulation; physical hardware acceptance tests are defined in [`FIELD_TESTING_AND_VALIDATION_GUIDE.md`](pi-diode-trailcam/docs/FIELD_TESTING_AND_VALIDATION_GUIDE.md).)*
 
 ```bash
 # 1. Run the interactive no-hardware benchtop simulation (generates a signed alert + opens live dashboard):
 python3 pi-diode-trailcam/run_mock_demo.py
 
-# 2. Run all 76 trailcam unit, firmware, hardware DRC, and contested-border resilience tests:
+# 2. Run all trailcam unit, firmware, hardware DRC, resilience, and quality-assessment regression suites:
 python3 pi-diode-trailcam/tests/test_dual_node_simulation.py
 python3 pi-diode-trailcam/tests/test_pico_firmware_simulation.py
 python3 pi-diode-trailcam/tests/test_enhanced_resilience.py
 python3 pi-diode-trailcam/tests/test_carrier_hardware_drc.py
+python3 pi-diode-trailcam/tests/test_quality_assessment_remediations.py
 
 # 3. Run all 24 sky-diode-relay 20km all-weather troposcatter, anti-jamming, civilian-EU mode, and FEC tests:
 python3 -B sky-diode-relay/tests/test_sky_relay_simulation.py

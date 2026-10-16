@@ -90,13 +90,18 @@ def make_command_center_handler(alerts_dir, verbose=False):
                     except ValueError:
                         since_idx = 0
                     sliced_alerts = alerts[since_idx:since_idx + limit]
+                    next_idx = min(total_count, since_idx + len(sliced_alerts))
+                    has_more = next_idx < total_count
                 else:
                     sliced_alerts = alerts[-limit:]
+                    next_idx = total_count
+                    has_more = False
 
                 payload = {
                     "timestamp": int(time.time()),
                     "total_count": total_count,
-                    "next_idx": total_count,
+                    "next_idx": next_idx,
+                    "has_more": has_more,
                     "alerts": sliced_alerts,
                     "node_count": 4,
                     "diode_enforced": True,

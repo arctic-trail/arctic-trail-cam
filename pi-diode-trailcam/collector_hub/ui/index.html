@@ -1350,6 +1350,7 @@
         : (parseFloat(fallbackObj.speedKmh ?? 0));
 
       const tempC = kv.TEMP !== undefined ? parseFloat(kv.TEMP) : null;
+      const battV = kv.BATT_V !== undefined ? parseFloat(kv.BATT_V) : null;
       const uptimeS = kv.UPTIME_S !== undefined ? parseInt(kv.UPTIME_S, 10) : null;
       let uptimeStr = '--';
       if (uptimeS !== null && !isNaN(uptimeS)) {
@@ -1359,11 +1360,13 @@
         uptimeStr = d > 0 ? `${d}d ${h}h` : (h > 0 ? `${h}h ${m}m` : `${m}m ${uptimeS % 60}s`);
       }
       const profile = kv.PROFILE || (rawStr && rawStr.includes('DIRECT_WAKE') ? 'DIRECT_WAKE' : 'AUTO');
-      return { magDelta, seisDelta, radarM, speedKmh, tempC, uptimeStr, profile };
+      return { magDelta, seisDelta, radarM, speedKmh, tempC, battV, uptimeStr, profile };
     }
 
     function classifyCategory(rawClass) {
       const c = String(rawClass || '').toLowerCase();
+      if (c.includes('camera_error') || c.includes('sensor_error') || c.includes('fault')) return 'system';
+      if (c.includes('sensor_trigger') || c.includes('no_ai') || c.includes('direct_wake')) return 'system';
       if (c.includes('person') || c.includes('bicycle')) return 'person';
       if (c.includes('boat') || c.includes('watercraft')) return 'boat';
       if (
@@ -1373,6 +1376,28 @@
         c.includes('sheep') || c.includes('reindeer') || c.includes('bovid') || c.includes('horse')
       ) return 'wildlife';
       return 'vehicle';
+    }
+
+    function formatAlertBadgeIcon(tObj) {
+      if (!tObj) return '📡';
+      if (tObj.camera_ok === false || tObj.type === 'camera_error') return '⚠️';
+      if (tObj.category === 'system') return '📡';
+      if (tObj.category === 'person') return '🧑';
+      if (tObj.category === 'wildlife') return '🦌';
+      if (tObj.category === 'boat') return '🚤';
+      return '🚗';
+    }
+
+    function formatAlertTitle(tObj) {
+      if (!tObj) return 'NO TARGET';
+      if (tObj.camera_ok === false || tObj.type === 'camera_error') {
+        return 'CAMERA SENSOR ERROR';
+      }
+      const label = String(tObj.type || 'SENSOR TRIGGER').toUpperCase();
+      if (tObj.conf === null || tObj.conf === undefined || Number.isNaN(Number(tObj.conf))) {
+        return label;
+      }
+      return `${label} (${Math.round(Number(tObj.conf) * 100)}%)`;
     }
 
     function playAlertChime(category = 'vehicle') {
@@ -1511,12 +1536,13 @@
         const thumbCtx = thumbCvs.getContext('2d');
         drawTargetToCanvas(thumbCvs, thumbCtx, tObj, true);
 
-        const badgeIcon = tObj.category === 'person' ? '🧑' : (tObj.category === 'wildlife' ? '🦌' : (tObj.category === 'boat' ? '🚤' : '🚗'));
+        const badgeIcon = formatAlertBadgeIcon(tObj);
+        const titleStr = formatAlertTitle(tObj);
         const meta = document.createElement('div');
         meta.className = 'lb-grid-meta';
         meta.innerHTML = `
-          <div style="display:flex;justify-content:space-between;color:var(--accent-amber);font-weight:700;">
-            <span>${badgeIcon} [${tObj.alertTimeStr || 'Live'}] ${(tObj.type || 'TARGET').toUpperCase()} (${Math.round((tObj.conf || 0.9) * 100)}%)</span>
+          <div style="display:flex;justify-content:space-between;color:${tObj.camera_ok === false ? 'var(--accent-red, #ff5252)' : 'var(--accent-amber)'};font-weight:700;">
+            <span>${badgeIcon} [${tObj.alertTimeStr || 'Live'}] ${titleStr}</span>
             <span>${parsed.speedKmh.toFixed(1)} km/h</span>
           </div>
           <div style="display:flex;justify-content:space-between;color:var(--text-dim);font-size:10px;">
@@ -1545,7 +1571,7 @@
       const node = currentCamTarget.assignedNode || NODES[0];
       const parsed = parsePicoTrig(currentCamTarget.pico_trig, currentCamTarget);
       document.getElementById('lb-title').textContent =
-        `${node.id} // ${(currentCamTarget.type || 'TARGET').toUpperCase()} (${Math.round((currentCamTarget.conf || 0.9) * 100)}%)`;
+        `${node.id} // ${formatAlertTitle(currentCamTarget)}`;
       document.getElementById('lb-subtitle').textContent =
         `${currentCamTarget.alertTimeStr || 'Live'} | SHA-256: ${(currentCamTarget.hash || '').slice(0, 20)}...`;
       document.getElementById('lb-footer').textContent =
@@ -1579,7 +1605,7 @@
           a.nodeId || '',
           a.category || '',
           a.type || '',
-          (a.conf || 0).toFixed(2),
+          a.conf !== null && a.conf !== undefined ? Number(a.conf).toFixed(2) : '',
           Math.round(p.magDelta),
           Math.round(p.seisDelta),
           p.radarM.toFixed(2),
@@ -1658,13 +1684,13 @@
 
       tObj.nodeId = node.id;
       tObj.assignedNode = node;
-      tObj.category = classifyCategory(tObj.type);
+      tObj.category = classifyCategory(tObj.camera_ok === false ? 'camera_error' : tObj.type);
       if (!tObj.alertTimeStr) {
         tObj.alertTimeStr = tObj.ts ? new Date(tObj.ts * 1000).toLocaleTimeString() : new Date().toLocaleTimeString();
       }
       if (!recordedAlerts.includes(tObj)) {
         recordedAlerts.unshift(tObj);
-        if (recordedAlerts.length > 200) recordedAlerts.pop();
+        if (recordedAlerts.length > 1000) recordedAlerts.pop();
       }
 
       if (playSound) playAlertChime(tObj.category);
@@ -1801,10 +1827,11 @@
         const parsed = parsePicoTrig(tObj.pico_trig, tObj);
         const item = document.createElement('div');
         item.className = 'alert-item' + (tObj === currentCamTarget ? ' selected' : '');
-        const badgeIcon = tObj.category === 'person' ? '🧑' : (tObj.category === 'wildlife' ? '🦌' : (tObj.category === 'boat' ? '🚤' : '🚗'));
+        const badgeIcon = formatAlertBadgeIcon(tObj);
+        const titleStr = formatAlertTitle(tObj);
         item.innerHTML = `
-          <div style="display:flex;justify-content:space-between;color:var(--accent-amber);font-weight:700;">
-            <span>${badgeIcon} [${tObj.alertTimeStr}] ${(tObj.type || 'TARGET').toUpperCase()} (${Math.round((tObj.conf || 0.9) * 100)}%)</span>
+          <div style="display:flex;justify-content:space-between;color:${tObj.camera_ok === false ? 'var(--accent-red, #ff5252)' : 'var(--accent-amber)'};font-weight:700;">
+            <span>${badgeIcon} [${tObj.alertTimeStr}] ${titleStr}</span>
             <span>${parsed.speedKmh.toFixed(1)} km/h</span>
           </div>
           <div style="display:flex;justify-content:space-between;color:var(--text-dim);font-size:10px;margin-top:2px;">
@@ -2230,6 +2257,14 @@
     }
 
     // UI Node List & Selection
+    function formatNodePowerLine(n, isBurst) {
+      const pwrStr = isBurst ? `${n.burstW}W Est.` : `${n.standbyMw}mW Est.`;
+      if (typeof n.measuredBatteryV === 'number' && !isNaN(n.measuredBatteryV)) {
+        return `${n.measuredBatteryV.toFixed(2)}V (Measured) | ${pwrStr}`;
+      }
+      return `12V SLA (Unmeasured) | ${pwrStr}`;
+    }
+
     function renderNodeLists() {
       const container = document.getElementById('node-list');
       container.innerHTML = '';
@@ -2237,6 +2272,9 @@
         const card = document.createElement('div');
         card.className = 'node-card';
         const isBurst = n.burstTimer > 0;
+        const barWidth = typeof n.measuredBatteryV === 'number'
+          ? Math.max(5, Math.min(100, Math.round(((n.measuredBatteryV - 11.4) / (12.8 - 11.4)) * 100)))
+          : 100;
         card.innerHTML = `
           <div class="node-card-top">
             <span>${n.id}</span>
@@ -2244,8 +2282,8 @@
           </div>
           <div class="node-meta">${n.name}</div>
           <div class="node-meta" style="color:var(--text-main);">${n.optics}</div>
-          <div class="node-meta">${n.batteryV}V (${n.batteryPct}%) | ${isBurst ? n.burstW + 'W' : n.standbyMw + 'mW'}</div>
-          <div class="bar-bg"><div class="bar-fill" style="width:${n.batteryPct}%"></div></div>
+          <div class="node-meta">${formatNodePowerLine(n, isBurst)}</div>
+          <div class="bar-bg"><div class="bar-fill" style="width:${barWidth}%;opacity:${typeof n.measuredBatteryV === 'number' ? '1.0' : '0.35'}"></div></div>
         `;
         card.onclick = () => selectNode(n);
         container.appendChild(card);
@@ -2256,10 +2294,13 @@
       focusOnObject(n.pos, n.id);
       document.getElementById('insp-title').textContent = `SELECTED: ${n.id}`;
       document.getElementById('insp-tier').textContent = n.linkType === 'repeater' ? 'OPTIONAL SKY RELAY' : 'FIELD CAMERA';
+      const battLabel = (typeof n.measuredBatteryV === 'number' && !isNaN(n.measuredBatteryV))
+        ? `${n.measuredBatteryV.toFixed(2)}V Measured`
+        : '12V Nominal (Unmeasured)';
       document.getElementById('insp-body').innerHTML = `
         <div><b>Compute:</b> ${n.tier}</div>
         <div><b>Optics:</b> ${n.optics}</div>
-        <div><b>Power:</b> ${n.burstTimer > 0 ? n.burstW + 'W Active' : n.standbyMw + 'mW Standby'} (${n.batteryV}V)</div>
+        <div><b>Power:</b> ${n.burstTimer > 0 ? n.burstW + 'W Active Est.' : n.standbyMw + 'mW Standby Est.'} (${battLabel})</div>
         <div><b>Egress:</b> ${n.linkLabel}</div>
         <div><b>Link Status:</b> ${n.linkType === 'sky' ? '+28 dB SNR (NLOS Cloud)' : '1 Gbps Physical Diode'}</div>
       `;
@@ -2542,23 +2583,40 @@
       }
       if (!node) node = NODES[0];
 
-      const det0 = (rec.detections && rec.detections[0]) || {};
-      const detClass = det0.class || det0.class_name || rec.trigger || 'vehicle';
-      const detConf = det0.conf !== undefined ? det0.conf : (det0.confidence !== undefined ? det0.confidence : 0.94);
+      const cameraOk = rec.camera_ok !== false;
+      const detList = Array.isArray(rec.detections) ? rec.detections : [];
+      let detClass = 'sensor_trigger';
+      let detConf = null;
+      if (!cameraOk) {
+        detClass = 'camera_error';
+        detConf = null;
+      } else if (detList.length > 0) {
+        const det0 = detList[0] || {};
+        detClass = det0.class || det0.class_name || 'target';
+        detConf = det0.conf !== undefined ? det0.conf : (det0.confidence !== undefined ? det0.confidence : null);
+      } else if (rec.trigger) {
+        detClass = rec.trigger;
+        detConf = null;
+      }
+
       const parsed = parsePicoTrig(rec.pico_trig || rec.trigger || '');
+      if (parsed.battV !== null && !isNaN(parsed.battV)) {
+        node.measuredBatteryV = parsed.battV;
+      }
 
       const tObj = {
         id: 'ALR-' + String(recordedAlerts.length + 1).padStart(3, '0'),
         ts: rec.timestamp || rec.ts || Math.floor(Date.now() / 1000),
         type: detClass,
         conf: detConf,
+        camera_ok: cameraOk,
         speedKmh: parsed.speedKmh,
         magDelta: parsed.magDelta,
         seisRms: parsed.seisDelta,
         pico_trig: rec.pico_trig || rec.trigger || '',
         hash: rec.image_sha256 || rec.img_sha256 || '',
-        detections: rec.detections || [],
-        backend: rec.inference_backend || (rec.hailo_active ? 'hailo' : 'onnx_cpu'),
+        detections: detList,
+        backend: rec.inference_backend || (!cameraOk ? 'camera_error' : (rec.hailo_active ? 'hailo' : 'onnx_cpu')),
         assignedNode: node,
         nodeId: node.id
       };
@@ -2584,26 +2642,49 @@
     // Poll live alerts from dashboard_server.py using incremental cursor pagination
     let lastKnownJournalCount = 0;
     let initialLoadDone = false;
+    let isPollingAlerts = false;
 
     async function pollLiveAlerts() {
+      if (isPollingAlerts) return;
+      isPollingAlerts = true;
       try {
-        const res = await fetch(`/api/alerts?since_idx=${lastKnownJournalCount}&limit=100`);
-        if (!res.ok) return;
-        const data = await res.json();
-        const totalCount = typeof data.total_count === 'number' ? data.total_count : (data.alerts ? data.alerts.length : 0);
-        if (data.alerts && data.alerts.length > 0 && totalCount > lastKnownJournalCount) {
+        let pagesDrained = 0;
+        while (pagesDrained < 50) {
+          const res = await fetch(`/api/alerts?since_idx=${lastKnownJournalCount}&limit=100`);
+          if (!res.ok) break;
+          const data = await res.json();
+          const slice = Array.isArray(data.alerts) ? data.alerts : [];
+          const totalCount = typeof data.total_count === 'number' ? data.total_count : (lastKnownJournalCount + slice.length);
+          const nextIdx = typeof data.next_idx === 'number'
+            ? data.next_idx
+            : Math.min(totalCount, lastKnownJournalCount + slice.length);
+
+          if (slice.length === 0 || nextIdx <= lastKnownJournalCount) {
+            break;
+          }
+
           // Clear initial placeholder on first real alert
           if (!initialLoadDone && recordedAlerts.length === 1 && !recordedAlerts[0].imageUrl) {
             recordedAlerts.length = 0;
           }
-          data.alerts.forEach((rec, idx) => {
-            const isNewestOnPoll = initialLoadDone && (idx === data.alerts.length - 1);
-            ingestJournalAlert(rec, !isNewestOnPoll);
+
+          const hasMoreAfterThisPage = Boolean(data.has_more) || (nextIdx < totalCount);
+          slice.forEach((rec, idx) => {
+            const isVeryLastRecord = initialLoadDone && !hasMoreAfterThisPage && (idx === slice.length - 1);
+            ingestJournalAlert(rec, !isVeryLastRecord);
           });
-          lastKnownJournalCount = totalCount;
+
+          lastKnownJournalCount = nextIdx;
+          pagesDrained += 1;
+          if (!hasMoreAfterThisPage) {
+            break;
+          }
         }
         initialLoadDone = true;
-      } catch (_) {}
+      } catch (_) {
+      } finally {
+        isPollingAlerts = false;
+      }
     }
 
     pollLiveAlerts();

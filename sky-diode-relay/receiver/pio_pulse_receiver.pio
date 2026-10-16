@@ -24,7 +24,14 @@ edge_detected:
     mov y, osr                  ; Load post-pulse dead-time holdoff count (e.g. 20 ticks = 400 ns)
 
 deadtime_holdoff:
-    jmp x-- deadtime_next       ; Keep decrementing master timer X during holdoff!
+    jmp x-- deadtime_next       ; 1 cycle: Keep decrementing master timer X during holdoff!
 deadtime_next:
-    jmp y-- deadtime_holdoff    ; Wait for holdoff window to expire (20 ns per iteration)
+    jmp y-- deadtime_holdoff    ; 1 cycle: Wait for holdoff window to expire (20 ns per iteration)
+
+wait_low_rearm:
+    jmp pin wait_low_still_high ; 1 cycle: Ensure comparator pin returns LOW before re-arming rising edge
+    jmp x-- sample_loop         ; 1 cycle: Pin is LOW -> decrement X (20 ns tick) and re-arm sample_loop
+wait_low_still_high:
+    jmp x-- wait_low_rearm      ; 1 cycle: Pin still HIGH -> decrement X (20 ns tick) and keep waiting
 .wrap
+

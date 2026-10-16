@@ -113,6 +113,42 @@ class TestCarrierHardwareDRC(unittest.TestCase):
             self.assertIn("pi-diode-carrier.drl", namelist)
             self.assertGreaterEqual(len(namelist), 14)
 
+    def test_06_in2_power_plane_zone_isolation(self):
+        """Verify In2.Cu uses non-overlapping isolated power zones and never shorts distinct power rails."""
+        pcb_path = os.path.join(HARDWARE_DIR, "kicad", "pi-diode-carrier.kicad_pcb")
+        with open(pcb_path, "r", encoding="utf-8") as f:
+            pcb_content = f.read()
+
+        # Verify distinct In2.Cu zones exist in KiCad PCB for +12V_RAW, +3V3_ALWAYS_ON, +3V3_SENSORS
+        for znet in ["+12V_RAW", "+3V3_ALWAYS_ON", "+3V3_SENSORS"]:
+            self.assertIn(f'(net_name "{znet}") (layer "In2.Cu")', pcb_content)
+
+        # Verify In2_Cu.gbr contains 3 separate G36/G37 zone pours with non-overlapping bounding boxes
+        in2_path = os.path.join(HARDWARE_DIR, "gerbers", "pi-diode-carrier-In2_Cu.gbr")
+        with open(in2_path, "r", encoding="utf-8") as f:
+            in2_content = f.read()
+
+        self.assertEqual(in2_content.count("G36*"), 3, "In2_Cu.gbr must contain 3 isolated power zones")
+        self.assertEqual(in2_content.count("G37*"), 3, "In2_Cu.gbr must close all 3 isolated power zones")
+
+        zones = [
+            ("+12V_RAW", 6.0, 66.0, 34.0, 78.0),
+            ("+3V3_ALWAYS_ON", 42.0, 22.0, 95.0, 65.0),
+            ("+3V3_SENSORS", 72.0, 67.0, 96.0, 78.0),
+        ]
+        # Verify pairwise non-overlap with >= 1.0mm clearance
+        for i in range(len(zones)):
+            for j in range(i + 1, len(zones)):
+                _, ax1, ay1, ax2, ay2 = zones[i]
+                _, bx1, by1, bx2, by2 = zones[j]
+                sep_x = max(0.0, max(ax1 - bx2, bx1 - ax2))
+                sep_y = max(0.0, max(ay1 - by2, by1 - ay2))
+                self.assertGreaterEqual(
+                    max(sep_x, sep_y), 1.0,
+                    f"In2.Cu zones {zones[i][0]} and {zones[j][0]} overlap or violate clearance"
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
+

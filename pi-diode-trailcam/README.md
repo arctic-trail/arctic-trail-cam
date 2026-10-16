@@ -67,17 +67,22 @@ When the camera protects a lake cottage $200\text{ m}$ to $20\text{ km}$ away fr
 
 ```bash
 # Run the full 200m–20km Build D Troposcatter & 6-Layer Anti-Jamming link verification suite:
-pytest -v ../sky-diode-relay/tests/test_sky_relay.py
+python3 -B ../sky-diode-relay/tests/test_sky_relay_simulation.py
 ```
 
-### 4. Provisioning Unique Node Keys Before Field Deployment
-Generate a unique `Ed25519` keypair for each camera node and register its public key with the collector hub:
+### 4. Provisioning Unique Node Keys & Commissioning `diode-node.service` Before Field Deployment
+Generate a unique `Ed25519` keypair for each camera node, register its public key in `collector_hub/authorized_nodes.json` (which automatically revokes trust in the demo `NODE-NORTH-01` example key), and run `install_pi5_fastboot.sh` on the Pi 5:
 
 ```bash
-python3 pi5_sender_node/generate_keys.py \
-  --node NODE-NORTH-01 \
-  --write-node-key ./node_key.json \
-  --register-hub ./verified_alerts/authorized_nodes.json
+# 1. On the Pi 5 Sender Node: generate unique node_key.json (includes both node_id and private_key_hex)
+python3 pi5_sender_node/generate_keys.py CAMERA-NORTH-01
+
+# 2. On the Pi 5 Sender Node: install /etc/trailcam/node_key.json, /etc/trailcam/node.env (ALLOW_EXAMPLE_KEYS=0),
+#    disable Wi-Fi/BT in /boot/firmware/config.txt, enable diode-node.service, and enable read-only OverlayFS:
+sudo bash pi5_sender_node/install_pi5_fastboot.sh CAMERA-NORTH-01
+
+# 3. To verify an exported Dead-Drop evidence bundle offline (checking Ed25519 signatures + SHA-256):
+python3 collector_hub/receiver_hub.py --verify-bundle ./dead_drop_alerts_export.zip
 ```
 
-Follow **[Part 1: IKEA-Style Indoor Benchtop Assembly & Bring-Up Manual (`Stages 1–3`)](docs/BENCHTOP_QUICKSTART_GUIDE.md)** and **[Part 2: IKEA-Style 3-Zone Enclosure Build, Camouflage & Tree Installation Manual (`Stages 4–6`)](docs/ASSEMBLY_GUIDE.md)** (plus the complete **[Tools & Hole-Saw Schedule (`[T01]`–`[T12]`)](docs/HARDWARE_SPECS_AND_BOM.md#complete-tools--workshop-equipment-schedule-t01t12)**) for step-by-step zero-experience assembly, installation, and daily operation.
+Follow **[Part 1: IKEA-Style Indoor Benchtop Assembly & Bring-Up Manual (`Stages 1–3`)](docs/BENCHTOP_QUICKSTART_GUIDE.md)** and **[Part 2: IKEA-Style 3-Zone Enclosure Build, Camouflage & Tree Installation Manual (`Stages 4–6`)](docs/ASSEMBLY_GUIDE.md)** (plus the complete **[Tools & Hole-Saw Schedule (`[T01]`–`[T12]`)](docs/HARDWARE_SPECS_AND_BOM.md#complete-tools--workshop-equipment-schedule-t01t12-with-retail-prices)**) for step-by-step zero-experience assembly, installation, and daily operation.

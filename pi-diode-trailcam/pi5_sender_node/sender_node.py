@@ -35,27 +35,64 @@ DONE_GPIO = 23
 
 DEFAULT_EXAMPLE_PRIVKEY_HEX = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 NODE_KEY_FILE = os.getenv("NODE_KEY_FILE", "/etc/trailcam/node_key.json")
+MAX_META_PACKET_BYTES = 1400
+MAX_DETECTIONS_IN_PACKET = 16
 
 
-def load_signing_key():
+def load_signing_key(key_file=None, allow_example_keys=None):
     """
-    Loads the node's 32-byte Ed25519 private key from NODE_KEY_FILE or PRIVATE_KEY_HEX.
+    Loads the node's 32-byte Ed25519 private key AND provisioned node_id from
+    NODE_KEY_FILE (or PRIVATE_KEY_HEX / NODE_ID environment variables).
     Refuses the public repository example key when ALLOW_EXAMPLE_KEYS=0.
     """
+    global NODE_ID
     priv_hex = os.getenv("PRIVATE_KEY_HEX")
-    if not priv_hex and os.path.isfile(NODE_KEY_FILE):
-        try:
-            with open(NODE_KEY_FILE, "r", encoding="utf-8") as f:
-                key_data = json.load(f)
-                priv_hex = key_data.get("private_key_hex")
-        except Exception as e:
-            print(f"[!] Warning reading {NODE_KEY_FILE}: {e}", file=sys.stderr)
+    explicit_env_node = os.getenv("NODE_ID")
+
+    candidates = []
+    if key_file:
+        candidates.append(key_file)
+    else:
+        env_kf = os.getenv("NODE_KEY_FILE")
+        if env_kf:
+            candidates.append(env_kf)
+        candidates.extend([
+            "/etc/trailcam/node_key.json",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "node_key.json"),
+        ])
+
+    for kf in candidates:
+        if kf and os.path.isfile(kf):
+            try:
+                with open(kf, "r", encoding="utf-8") as f:
+                    key_data = json.load(f)
+                if not isinstance(key_data, dict):
+                    raise ValueError("node_key.json must be a JSON object")
+                if not priv_hex:
+                    priv_hex = key_data.get("private_key_hex")
+                file_node_id = key_data.get("node_id")
+                if file_node_id and not explicit_env_node:
+                    NODE_ID = str(file_node_id).strip()
+                break
+            except Exception as e:
+                print(f"[!] Error reading {kf}: {e}", file=sys.stderr)
+                raise RuntimeError(f"Invalid node_key.json ({kf}): {e}") from e
+
+    if allow_example_keys is None:
+        allow_example = os.getenv("ALLOW_EXAMPLE_KEYS", "1") != "0"
+    else:
+        allow_example = bool(allow_example_keys)
 
     if not priv_hex:
+        if not allow_example:
+            raise RuntimeError(
+                "No node private key provisioned and ALLOW_EXAMPLE_KEYS=0. "
+                "Provision a unique key with generate_keys.py."
+            )
         priv_hex = DEFAULT_EXAMPLE_PRIVKEY_HEX
 
-    if priv_hex == DEFAULT_EXAMPLE_PRIVKEY_HEX:
-        if os.getenv("ALLOW_EXAMPLE_KEYS", "1") == "0":
+    if priv_hex.lower() == DEFAULT_EXAMPLE_PRIVKEY_HEX.lower():
+        if not allow_example:
             raise RuntimeError(
                 "Refusing to sign with default example key while ALLOW_EXAMPLE_KEYS=0. "
                 "Provision a unique key with generate_keys.py."
@@ -63,6 +100,42 @@ def load_signing_key():
         print("[!] SECURITY NOTICE: Using default benchtop example key. Provision unique keys before deployment.", file=sys.stderr)
 
     return SigningKey(bytes.fromhex(priv_hex))
+
+
+def derive_ephemeral_key_from_trig(trig_line):
+    """
+    Zero-Disk Ephemeral Key Derivation & Zeroization:
+    If the Pico 2 Gatekeeper provides an OTP/SRAM key seed over UART (`KEY_SEED=<64-hex>`),
+    derives a deterministic Ed25519 SigningKey in RAM via BLAKE2b, overwrites the seed buffer
+    in-place with zeros, and strips `KEY_SEED=...` from the telemetry string so the secret
+    seed never touches disk or leaves the node.
+    Returns (sanitized_trig_line, ephemeral_signing_key_or_None).
+    """
+    if not trig_line or "KEY_SEED=" not in trig_line:
+        return trig_line, None
+
+    parts = trig_line.split(",")
+    clean_parts = []
+    ephemeral_sk = None
+    for part in parts:
+        if part.startswith("KEY_SEED="):
+            seed_hex = part.split("=", 1)[1].strip()
+            try:
+                seed_buf = bytearray.fromhex(seed_hex)
+                if len(seed_buf) >= 16:
+                    derived = bytearray(
+                        hashlib.blake2b(seed_buf, digest_size=32, person=b"ARCTIC-DIODE-KEY").digest()
+                    )
+                    ephemeral_sk = SigningKey(bytes(derived))
+                    for i in range(len(derived)):
+                        derived[i] = 0
+                for i in range(len(seed_buf)):
+                    seed_buf[i] = 0
+            except Exception:
+                pass
+        else:
+            clean_parts.append(part)
+    return ",".join(clean_parts), ephemeral_sk
 
 
 signing_key = load_signing_key()
@@ -221,11 +294,12 @@ def compute_aloha_interpass_delays_s(node_id=NODE_ID, shared_trunk=None):
     return (round(base_ms_1 / 1000.0, 3), round(base_ms_2 / 1000.0, 3))
 
 
-def transmit_over_diode(sock, alert_meta, jpeg_bytes, shared_trunk=None):
+def transmit_over_diode(sock, alert_meta, jpeg_bytes, shared_trunk=None, custom_signing_key=None):
     """
     Sends signed JSON metadata + chunked JPEG over one-way UDP with
     calibrated packet pacing, 8-byte cryptographic nonce chunk correlation,
-    3x carousel repetition, and optional Aloha inter-pass jitter for shared fiber trunks.
+    bounded metadata packet size (<= MAX_META_PACKET_BYTES), 3x carousel repetition,
+    and optional Aloha inter-pass jitter for shared fiber trunks.
     """
     payload_hash = hashlib.sha256(jpeg_bytes).hexdigest()
     nonce_hex = alert_meta.get("nonce")
@@ -237,8 +311,30 @@ def transmit_over_diode(sock, alert_meta, jpeg_bytes, shared_trunk=None):
     alert_meta["nonce"] = nonce_hex
     nonce_bytes = bytes.fromhex(nonce_hex)
 
+    # Enforce strict protocol header size limits so DD\x01 metadata never exceeds MTU or UDP buffer
+    if isinstance(alert_meta.get("detections"), list):
+        orig_dets = list(alert_meta["detections"])
+        # Prioritize highest-confidence detections first
+        orig_dets.sort(key=lambda d: float(d.get("conf", 0.0)) if isinstance(d, dict) else 0.0, reverse=True)
+        total_det_count = len(orig_dets)
+        capped_dets = orig_dets[:MAX_DETECTIONS_IN_PACKET]
+        if total_det_count > len(capped_dets):
+            alert_meta["total_detections"] = total_det_count
+            alert_meta["detections_truncated"] = True
+        alert_meta["detections"] = capped_dets
+
+        # Further trim if serialized DD\x01 packet exceeds MAX_META_PACKET_BYTES
+        while len(alert_meta["detections"]) > 0:
+            candidate_bytes = json.dumps(alert_meta, separators=(",", ":")).encode("utf-8")
+            if 3 + 64 + len(candidate_bytes) <= MAX_META_PACKET_BYTES:
+                break
+            alert_meta["detections"].pop()
+            alert_meta["total_detections"] = total_det_count
+            alert_meta["detections_truncated"] = True
+
     meta_bytes = json.dumps(alert_meta, separators=(",", ":")).encode("utf-8")
-    signature = signing_key.sign(meta_bytes).signature
+    active_sk = custom_signing_key if custom_signing_key is not None else signing_key
+    signature = active_sk.sign(meta_bytes).signature
 
     # Type 0x01: Signed Alert Header Datagram
     header_pkt = b"DD\x01" + signature + meta_bytes
@@ -261,6 +357,7 @@ def transmit_over_diode(sock, alert_meta, jpeg_bytes, shared_trunk=None):
             chunk_hdr = b"DD\x02" + nonce_bytes + struct.pack(">HH", idx, total_chunks)
             sock.sendto(chunk_hdr + chunk, (RECEIVER_IP, UDP_PORT))
             time.sleep(0.0008)  # 800us pacing between chunks (~10 Mbps line rate)
+
 
 def signal_pico_done():
     """
@@ -315,26 +412,81 @@ def signal_pico_done():
         print("[*] BENCH_TEST_MODE=1: Asserted DONE_GPIO (GPIO 23), skipping poweroff -f.")
 
 
-def _encode_target_crop(m_frame, xmin, ymin, xmax, ymax, quality=75):
-    """Extracts a padded BGR target crop from the 1080p RGB frame and encodes to JPEG."""
-    h, w, _ = m_frame.shape
-    x1, y1 = max(0, int(xmin * w) - 40), max(0, int(ymin * h) - 40)
-    x2, y2 = min(w, int(xmax * w) + 40), min(h, int(ymax * h) + 40)
+def compute_crop_pixel_bounds(frame_shape, xmin, ymin, xmax, ymax, pad_px=40):
+    """Computes clamped pixel crop coordinates (x1, y1, x2, y2) for a normalized box."""
+    h, w = int(frame_shape[0]), int(frame_shape[1])
+    x1 = max(0, int(xmin * w) - pad_px)
+    y1 = max(0, int(ymin * h) - pad_px)
+    x2 = min(w, int(xmax * w) + pad_px)
+    y2 = min(h, int(ymax * h) + pad_px)
     if x2 <= x1 or y2 <= y1:
-        x1, y1, x2, y2 = 0, 0, w, h
-    crop_bgr = cv2.cvtColor(m_frame[y1:y2, x1:x2], cv2.COLOR_RGB2BGR)
-    _, enc = cv2.imencode(".jpg", crop_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
-    return enc.tobytes()
+        return (0, 0, w, h)
+    return (x1, y1, x2, y2)
+
+
+def remap_detections_to_crop(detections, crop_bounds, frame_shape):
+    """
+    Transforms full-frame normalized detection bounding boxes [xmin, ymin, xmax, ymax]
+    into normalized [0..1, 0..1] coordinates relative to the cropped JPEG image `(x1, y1, x2, y2)`.
+    Preserves the original full-frame coordinates in `full_frame_box` so dashboard overlays
+    align 100% accurately on the transmitted target crop.
+    """
+    if not detections or not crop_bounds:
+        return detections
+    h, w = float(frame_shape[0]), float(frame_shape[1])
+    x1, y1, x2, y2 = [float(v) for v in crop_bounds]
+    crop_w = max(1.0, x2 - x1)
+    crop_h = max(1.0, y2 - y1)
+
+    remapped = []
+    for det in detections:
+        if not isinstance(det, dict) or "box" not in det or len(det["box"]) != 4:
+            remapped.append(det)
+            continue
+        bx1, by1, bx2, by2 = [float(v) for v in det["box"]]
+        # Convert full-frame [0..1] -> full-frame pixels -> crop-relative [0..1]
+        cx1 = max(0.0, min(1.0, (bx1 * w - x1) / crop_w))
+        cy1 = max(0.0, min(1.0, (by1 * h - y1) / crop_h))
+        cx2 = max(0.0, min(1.0, (bx2 * w - x1) / crop_w))
+        cy2 = max(0.0, min(1.0, (by2 * h - y1) / crop_h))
+        new_det = dict(det)
+        new_det["full_frame_box"] = [round(bx1, 3), round(by1, 3), round(bx2, 3), round(by2, 3)]
+        new_det["box"] = [round(cx1, 3), round(cy1, 3), round(cx2, 3), round(cy2, 3)]
+        remapped.append(new_det)
+    return remapped
+
+
+def _encode_target_crop(m_frame, xmin, ymin, xmax, ymax, quality=75, return_bounds=False):
+    """
+    Extracts a padded target crop from the 1080p frame and encodes to JPEG.
+    Note: Picamera2 'RGB888' on Raspberry Pi OS Bookworm outputs 3-channel arrays in OpenCV BGR
+    memory order directly; channel swapping is only performed if CAMERA_COLOR_SWAP_RB=1 is set.
+    """
+    x1, y1, x2, y2 = compute_crop_pixel_bounds(m_frame.shape, xmin, ymin, xmax, ymax, pad_px=40)
+    crop_view = m_frame[y1:y2, x1:x2]
+    if os.getenv("CAMERA_COLOR_SWAP_RB", "0") == "1":
+        crop_view = cv2.cvtColor(crop_view, cv2.COLOR_RGB2BGR)
+    _, enc = cv2.imencode(".jpg", crop_view, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    jpeg_bytes = enc.tobytes()
+    if return_bounds:
+        return jpeg_bytes, (x1, y1, x2, y2)
+    return jpeg_bytes
+
 
 # ==============================================================================
 # Main Pipeline with Strict Fault Recovery
 # ==============================================================================
 def main():
     try:
+        # Refresh node identity and key in case NODE_KEY_FILE / NODE_ID were configured at runtime
+        active_signing_key = load_signing_key()
         iface = setup_unidirectional_network()
-        pico_telemetry = read_pico_telemetry()
+        raw_pico_telemetry = read_pico_telemetry()
+        pico_telemetry, ephemeral_sk = derive_ephemeral_key_from_trig(raw_pico_telemetry)
+        if ephemeral_sk is not None:
+            active_signing_key = ephemeral_sk
 
-        # Initialize Camera with Picamera2
+        # Initialize Camera with Picamera2 using synchronized single-request capture
         picam2 = None
         captured_pairs = []
 
@@ -349,9 +501,19 @@ def main():
             picam2.configure(config)
             picam2.start()
             time.sleep(0.25)
+            # Pulse 940nm IR strobe only during active exposure window (NVG stealth discipline)
+            pulse_ir_illuminator_strobe(30)
             for _ in range(3):
-                lores_f = picam2.capture_array("lores")
-                main_f = picam2.capture_array("main")
+                if hasattr(picam2, "capture_request"):
+                    req = picam2.capture_request()
+                    try:
+                        lores_f = req.make_array("lores")
+                        main_f = req.make_array("main")
+                    finally:
+                        req.release()
+                else:
+                    lores_f = picam2.capture_array("lores")
+                    main_f = picam2.capture_array("main")
                 captured_pairs.append((lores_f, main_f))
                 time.sleep(0.05)
         except Exception as e:
@@ -377,6 +539,8 @@ def main():
 
         detections_found = []
         best_crop_jpeg = b""
+        best_crop_bounds = None
+        best_crop_frame_shape = main_frame.shape
         inference_backend = "camera_error" if not camera_ok else "full_frame"
 
         # Attempt Hailo NPU Inference across captured frames with Graceful CPU Fallback
@@ -403,13 +567,17 @@ def main():
                                         })
                                         if score > best_score:
                                             best_score = score
-                                            best_crop_jpeg = _encode_target_crop(m_frame, xmin, ymin, xmax, ymax)
+                                            best_crop_jpeg, best_crop_bounds = _encode_target_crop(
+                                                m_frame, xmin, ymin, xmax, ymax, return_bounds=True
+                                            )
+                                            best_crop_frame_shape = m_frame.shape
                         if detections_found:
                             break
             except Exception as e:
                 hailo_available = False
                 detections_found = []
                 best_crop_jpeg = b""
+                best_crop_bounds = None
                 print(f"[!] Hailo NPU runtime failure (falling back to CPU): {e}", file=sys.stderr)
 
         # Fallback 1: CPU YOLOv8n ONNX inference via OpenCV DNN with NMSBoxes
@@ -417,7 +585,9 @@ def main():
             try:
                 net = cv2.dnn.readNetFromONNX(ONNX_PATH)
                 lores_frame, m_frame = captured_pairs[-1]
-                blob = cv2.dnn.blobFromImage(lores_frame, 1.0 / 255.0, (640, 640), swapRB=False, crop=False)
+                # Picamera2 RGB888 is BGR in memory; swapRB=True produces RGB input expected by YOLOv8 ONNX
+                swap_rb = os.getenv("CAMERA_COLOR_SWAP_RB", "1") == "1"
+                blob = cv2.dnn.blobFromImage(lores_frame, 1.0 / 255.0, (640, 640), swapRB=swap_rb, crop=False)
                 net.setInput(blob)
                 preds = net.forward()
                 inference_backend = "onnx_cpu"
@@ -461,15 +631,18 @@ def main():
                         })
                         if score > best_score:
                             best_score = score
-                            best_crop_jpeg = _encode_target_crop(m_frame, xmin, ymin, xmax, ymax)
+                            best_crop_jpeg, best_crop_bounds = _encode_target_crop(
+                                m_frame, xmin, ymin, xmax, ymax, return_bounds=True
+                            )
+                            best_crop_frame_shape = m_frame.shape
             except Exception as e:
                 print(f"[!] CPU ONNX fallback warning: {e}", file=sys.stderr)
 
         # Fallback 2: Multi-frame inter-frame motion ROI crop if NPU/ONNX unavailable
         if not hailo_available and not best_crop_jpeg and len(captured_pairs) >= 2:
             try:
-                g1 = cv2.cvtColor(captured_pairs[0][0], cv2.COLOR_RGB2GRAY)
-                g2 = cv2.cvtColor(captured_pairs[-1][0], cv2.COLOR_RGB2GRAY)
+                g1 = cv2.cvtColor(captured_pairs[0][0], cv2.COLOR_BGR2GRAY)
+                g2 = cv2.cvtColor(captured_pairs[-1][0], cv2.COLOR_BGR2GRAY)
                 diff = cv2.absdiff(cv2.GaussianBlur(g1, (5, 5), 0), cv2.GaussianBlur(g2, (5, 5), 0))
                 _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
                 cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -485,13 +658,24 @@ def main():
                             "box": [round(xmin, 3), round(ymin, 3), round(xmax, 3), round(ymax, 3)]
                         })
                         inference_backend = "motion_roi"
-                        best_crop_jpeg = _encode_target_crop(captured_pairs[-1][1], xmin, ymin, xmax, ymax)
+                        best_crop_jpeg, best_crop_bounds = _encode_target_crop(
+                            captured_pairs[-1][1], xmin, ymin, xmax, ymax, return_bounds=True
+                        )
+                        best_crop_frame_shape = captured_pairs[-1][1].shape
             except Exception:
                 pass
 
+        # Remap detection bounding boxes into the cropped image's coordinate frame
+        if best_crop_jpeg and best_crop_bounds is not None:
+            detections_found = remap_detections_to_crop(
+                detections_found, best_crop_bounds, best_crop_frame_shape
+            )
+
         # Fallback 3: if no target detected or NPU unavailable, encode a scaled full-frame snapshot
         if not best_crop_jpeg:
-            fallback_bgr = cv2.cvtColor(cv2.resize(main_frame, (960, 540)), cv2.COLOR_RGB2BGR)
+            fallback_bgr = cv2.resize(main_frame, (960, 540))
+            if os.getenv("CAMERA_COLOR_SWAP_RB", "0") == "1":
+                fallback_bgr = cv2.cvtColor(fallback_bgr, cv2.COLOR_RGB2BGR)
             if not camera_ok:
                 status_text = "CAMERA SENSOR ERROR"
             elif hailo_available:
@@ -516,7 +700,7 @@ def main():
             "camera_ok": camera_ok,
             "inference_backend": inference_backend,
         }
-        transmit_over_diode(sock, alert_payload, best_crop_jpeg)
+        transmit_over_diode(sock, alert_payload, best_crop_jpeg, custom_signing_key=active_signing_key)
         sock.close()
 
     except Exception as e:
@@ -527,3 +711,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -609,6 +609,46 @@ def unpack_pio_rx_timestamps(rx_fifo_words, tick_ns=20.0):
     return [((w - t0_tick) & 0xFFFFFFFF) * (tick_ns / 1000.0) for w in rx_fifo_words]
 
 
+def emulate_pio_pulse_receiver_waveform(pin_levels_by_20ns_tick, holdoff_ticks=20):
+    """
+    Cycle-accurate emulator of `pio_pulse_receiver.pio` (including `wait_low_rearm`
+    rising-edge re-arming while keeping the 32-bit timer X decrementing at 20 ns/tick).
+    Given a sequence of comparator pin levels (`0` or `1`) sampled at 20 ns intervals:
+      - In `sample_loop`: if pin == 1, latches `~x & 0xFFFFFFFF` into RX FIFO and enters
+        `deadtime_holdoff` for `holdoff_ticks + 1` ticks (`jmp x--` + `jmp y--`).
+      - In `wait_low_rearm`: continues decrementing `x` every 20 ns tick while waiting
+        for `pin == 0` so a stretched or stuck-HIGH comparator pulse never re-triggers!
+    Returns `rx_fifo_words` (list of 32-bit monotonic upward tick counts).
+    """
+    x_reg = 0xFFFFFFFF
+    rx_fifo_words = []
+    state = "SAMPLE_LOOP"
+    y_reg = 0
+
+    for pin_val in pin_levels_by_20ns_tick:
+        pin_high = bool(pin_val)
+        if state == "SAMPLE_LOOP":
+            if pin_high:
+                rx_fifo_words.append((~x_reg) & 0xFFFFFFFF)
+                y_reg = max(0, int(holdoff_ticks))
+                state = "DEADTIME_HOLDOFF"
+            else:
+                x_reg = (x_reg - 1) & 0xFFFFFFFF
+        elif state == "DEADTIME_HOLDOFF":
+            x_reg = (x_reg - 1) & 0xFFFFFFFF
+            if y_reg > 0:
+                y_reg -= 1
+            else:
+                state = "WAIT_LOW_REARM"
+        elif state == "WAIT_LOW_REARM":
+            x_reg = (x_reg - 1) & 0xFFFFFFFF
+            if not pin_high:
+                state = "SAMPLE_LOOP"
+
+    return rx_fifo_words
+
+
+
 def forward_verified_sky_alert(raw_payload_bytes, verify_key_hex, udp_host="127.0.0.1", udp_port=5514, send_udp=False):
     """
     Verifies a received `DD\\x01` signed sky alert and formats it into the canonical
@@ -1459,6 +1499,66 @@ def demodulate_vk7mo_lockin_stream(
     }
 
 
+class PlutoSDRReceiver:
+    """
+    Hardware interface for Analog Devices `ADALM-PLUTO` (`AD9363`) SDR + `Skyworks SKY65405-21EK1` LNA.
+    - Note: `SKY65405-21EK1` `VEN` (`2.8 V` typ / `3.5 V` max) MUST be wired strictly to
+      `Pico 2 H Pin 36 (3V3_OUT, 3.3V)` and NEVER to `+5.0 V`.
+    - When `pyadi-iio` (`adi`) is installed and an `ADALM-PLUTO` is reachable at `sdr_uri`,
+      captures IQ samples across the hopped carrier schedule and demodulates via
+      `demodulate_vk7mo_lockin_stream()`.
+    """
+
+    def __init__(self, sdr_uri="ip:192.168.2.2", civilian_eu_compliant=False, simulate_if_missing=True):
+        self.sdr_uri = sdr_uri
+        self.civilian_eu_compliant = bool(civilian_eu_compliant)
+        self.simulate_if_missing = bool(simulate_if_missing)
+        self.lna_ven_voltage_v = 3.3  # Driven from Pico 2 H Pin 36 (3V3_OUT), never +5.0V
+        self._sdr = None
+        self.hardware_attached = False
+        try:
+            import adi  # type: ignore
+            self._sdr = adi.Pluto(uri=self.sdr_uri)
+            self.hardware_attached = True
+        except Exception:
+            if not self.simulate_if_missing:
+                raise RuntimeError(f"ADALM-PLUTO SDR not reachable at {self.sdr_uri} and simulate_if_missing=False")
+
+    def receive_and_demodulate(
+        self,
+        fhss_key="FINLAND-BORDER-FHSS-KEY-2026",
+        symbol_ms=16.0,
+        simulated_passes=None,
+        cfo_search_range_hz=400.0,
+    ):
+        if self.hardware_attached and self._sdr is not None and simulated_passes is None:
+            import os
+            import sys
+            import numpy as np  # type: ignore
+
+            sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../transmitter")))
+            from sky_transmitter import derive_fhss_carrier_schedule
+
+            carriers_mhz = derive_fhss_carrier_schedule(
+                fhss_key, num_passes=3, civilian_eu_compliant=self.civilian_eu_compliant
+            )
+            passes = []
+            for freq_mhz in carriers_mhz:
+                self._sdr.rx_lo = int(round(freq_mhz * 1e6))
+                iq = self._sdr.rx()
+                passes.append([float(x) for x in np.abs(iq)])
+        else:
+            passes = simulated_passes or []
+
+        return demodulate_vk7mo_lockin_stream(
+            passes,
+            symbol_ms=symbol_ms,
+            fhss_key=fhss_key,
+            cfo_search_range_hz=cfo_search_range_hz,
+            civilian_eu_compliant=self.civilian_eu_compliant,
+        )
+
+
 if __name__ == "__main__":
     import argparse
     import os
@@ -1469,6 +1569,11 @@ if __name__ == "__main__":
         "--civilian-eu-compliant",
         action="store_true",
         help="Peacetime License-Exempt Civilian Mode (2400.0-2483.5 MHz ISM, <= 100 mW EIRP).",
+    )
+    parser.add_argument(
+        "--sdr-uri",
+        default="ip:192.168.2.2",
+        help="Analog Devices ADALM-PLUTO IIO URI (e.g., ip:192.168.2.2 or usb:1.2.6).",
     )
     args, _ = parser.parse_known_args()
 
@@ -1496,5 +1601,6 @@ if __name__ == "__main__":
     )
     assert vk7mo_res["payload"] == test_msg
     print("-> Self-test verification: 100% MATCH!")
+
 
 

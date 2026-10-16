@@ -23,6 +23,8 @@ except ModuleNotFoundError:
             os.execv(_venv_py, [_venv_py, "-B"] + sys.argv)
     raise
 
+import base64
+
 # ==============================================================================
 # Configuration & Security Parameters
 # ==============================================================================
@@ -33,15 +35,17 @@ MAX_CLOCK_SKEW_SEC = int(os.getenv("MAX_CLOCK_SKEW_SEC", "300"))  # Max clock dr
 STRICT_CLOCK_SKEW = os.getenv("STRICT_CLOCK_SKEW", "0") == "1"    # Drop vs warn on off-grid clock skew
 MAX_CHUNKS_PER_FRAME = 1024  # Cap at 1 MB per image to prevent memory DoS
 MAX_PENDING_FRAMES = 64      # Hard cap on concurrent partial frames in memory
+MAX_DATAGRAM_BYTES = 65535   # Full UDP datagram capacity so multi-detection headers are never truncated
 MAX_SAVED_ALERTS = int(os.getenv("MAX_SAVED_ALERTS", "0"))  # 0 = unlimited; >0 = circular cap for buried dead-drop vaults
 
 # Map of authorized camera Node IDs to their 32-byte Ed25519 Public Keys
+DEFAULT_EXAMPLE_PUBKEY_HEX = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
 DEFAULT_EXAMPLE_PUBKEYS = {
-    "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+    DEFAULT_EXAMPLE_PUBKEY_HEX,
 }
 
 KNOWN_NODE_PUBKEYS = {
-    "NODE-NORTH-01": VerifyKey(bytes.fromhex("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")),
+    "NODE-NORTH-01": VerifyKey(bytes.fromhex(DEFAULT_EXAMPLE_PUBKEY_HEX)),
 }
 
 # ==============================================================================
@@ -50,33 +54,72 @@ KNOWN_NODE_PUBKEYS = {
 # node_id -> {"last_ts": int, "seen_nonces": OrderedDict(nonce -> ts)}
 node_security_state = {}
 
-# prefix (16-char hex nonce) -> {"meta": dict, "created_at": float}
+# prefix (16-char hex nonce) -> {"meta": dict, "raw_meta_bytes": bytes, "sig_hex": str, "pubkey_hex": str, "created_at": float}
 pending_meta = {}
 
 # prefix (16-char hex nonce) -> {"chunks": dict(int -> bytes), "total": int, "created_at": float}
 pending_chunks = {}
 
-# prefix -> {"nonce": str, "completed_at": float} (tracks recently completed carousel bursts)
+# prefix -> {"nonce": str, "completed_at": float} (tracks durably committed carousel bursts)
 completed_prefixes = OrderedDict()
 
 
-def load_authorized_nodes(out_dir=None):
-    """Loads provisioned node public keys from authorized_nodes.json if present."""
+def load_authorized_nodes(out_dir=None, allow_example_keys=None):
+    """
+    Loads provisioned node public keys from authorized_nodes.json.
+    - When authorized_nodes.json exists, clears the default example key first so
+      provisioning any real camera node immediately removes trust in the public example key.
+    - When ALLOW_EXAMPLE_KEYS=0 (or allow_example_keys=False), strips all example keys and
+      fails closed if no real node public keys are configured.
+    """
     target_dir = out_dir or OUT_DIR
+    if allow_example_keys is None:
+        allow_example = os.getenv("ALLOW_EXAMPLE_KEYS", "1") != "0"
+    else:
+        allow_example = bool(allow_example_keys)
+
     reg_file = os.getenv("AUTHORIZED_NODES_FILE", os.path.join(target_dir, "authorized_nodes.json"))
     if os.path.isfile(reg_file):
         try:
             with open(reg_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            for nid, pub_hex in data.items():
-                if isinstance(pub_hex, str) and len(pub_hex) == 64:
-                    KNOWN_NODE_PUBKEYS[nid] = VerifyKey(bytes.fromhex(pub_hex))
+            if not isinstance(data, dict):
+                raise ValueError("authorized_nodes.json root must be a JSON object mapping node_id -> pubkey_hex")
         except Exception as e:
-            print(f"[!] Warning loading {reg_file}: {e}", file=sys.stderr)
+            print(f"[!] Fatal error loading {reg_file}: {e}", file=sys.stderr)
+            raise RuntimeError(f"Invalid authorized_nodes.json ({reg_file}): {e}") from e
+
+        # Clear pre-populated example identity before loading provisioned registry
+        KNOWN_NODE_PUBKEYS.clear()
+        for nid, pub_hex in data.items():
+            if not isinstance(pub_hex, str) or len(pub_hex) != 64:
+                raise RuntimeError(f"Invalid 64-char hex public key for node '{nid}' in {reg_file}")
+            if not allow_example and pub_hex.lower() in DEFAULT_EXAMPLE_PUBKEYS:
+                raise RuntimeError(f"Example public key for node '{nid}' is forbidden when ALLOW_EXAMPLE_KEYS=0")
+            KNOWN_NODE_PUBKEYS[nid] = VerifyKey(bytes.fromhex(pub_hex))
+
+        if not KNOWN_NODE_PUBKEYS:
+            raise RuntimeError(f"No valid node keys found in {reg_file}")
+    else:
+        if not allow_example:
+            # Remove any default example keys and fail closed if nothing remains
+            to_del = [
+                nid for nid, vk in KNOWN_NODE_PUBKEYS.items()
+                if vk.encode().hex().lower() in DEFAULT_EXAMPLE_PUBKEYS
+            ]
+            for nid in to_del:
+                del KNOWN_NODE_PUBKEYS[nid]
+            if not KNOWN_NODE_PUBKEYS:
+                raise RuntimeError(
+                    f"Refusing to start collector without {reg_file} while ALLOW_EXAMPLE_KEYS=0."
+                )
 
 
 def load_seen_nonces_from_disk(out_dir=None):
-    """Loads persisted (node_id, nonce, ts) records from disk so anti-replay survives restarts."""
+    """
+    Loads all persisted (node_id, nonce, ts) records from disk so anti-replay survives restarts
+    without evicting older nonces after 500 alerts.
+    """
     target_dir = out_dir or OUT_DIR
     cache_path = os.path.join(target_dir, "seen_nonces.jsonl")
     if not os.path.isfile(cache_path):
@@ -97,8 +140,6 @@ def load_seen_nonces_from_disk(out_dir=None):
                             node_security_state[nid] = {"last_ts": ts, "seen_nonces": OrderedDict()}
                         seen = node_security_state[nid]["seen_nonces"]
                         seen[nonce] = ts
-                        if len(seen) > 500:
-                            seen.popitem(last=False)
                         node_security_state[nid]["last_ts"] = max(node_security_state[nid]["last_ts"], ts)
                 except Exception:
                     pass
@@ -107,15 +148,24 @@ def load_seen_nonces_from_disk(out_dir=None):
 
 
 def _persist_seen_nonce(node_id, nonce, ts, out_dir=None):
-    """Appends a verified nonce to disk cache in OUT_DIR."""
+    """Durably appends a verified nonce to disk cache in OUT_DIR (raises OSError on disk failure)."""
     target_dir = out_dir or OUT_DIR
     cache_path = os.path.join(target_dir, "seen_nonces.jsonl")
-    try:
-        os.makedirs(target_dir, exist_ok=True)
-        with open(cache_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"node": node_id, "nonce": nonce, "ts": int(ts)}) + "\n")
-    except OSError:
-        pass
+    os.makedirs(target_dir, exist_ok=True)
+    with open(cache_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"node": node_id, "nonce": nonce, "ts": int(ts)}) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+
+
+def commit_seen_nonce(node_id, ts, nonce, out_dir=None):
+    """Commits a verified alert nonce to both persistent disk log and in-memory anti-replay set."""
+    _persist_seen_nonce(node_id, nonce, ts, out_dir=out_dir)
+    if node_id not in node_security_state:
+        node_security_state[node_id] = {"last_ts": int(ts), "seen_nonces": OrderedDict()}
+    state = node_security_state[node_id]
+    state["seen_nonces"][nonce] = int(ts)
+    state["last_ts"] = max(state["last_ts"], int(ts))
 
 
 def write_receiver_heartbeat(port=UDP_PORT, out_dir=None):
@@ -166,23 +216,61 @@ def _enforce_queue_cap(store_dict, max_entries=MAX_PENDING_FRAMES):
         del store_dict[oldest_key]
 
 
+def _atomic_write_bytes(target_path, data_bytes):
+    """Writes bytes to a temporary sibling file, fsyncs, and atomically replaces target_path."""
+    parent = os.path.dirname(os.path.abspath(target_path))
+    os.makedirs(parent, exist_ok=True)
+    tmp_path = f"{target_path}.tmp.{os.getpid()}"
+    try:
+        with open(tmp_path, "wb") as f:
+            f.write(data_bytes)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, target_path)
+    except Exception:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
 def try_reconstruct_image(prefix):
     """
-    Reconstructs JPEG frame and verifies SHA-256 integrity when both
-    signed metadata and 100% of binary chunks are present.
-    If SHA-256 fails on Pass 1 (bit error), retains pending_meta and clears
-    chunk buffer so Pass 2 / Pass 3 carousel copies can repair the image.
+    Reconstructs JPEG frame, verifies SHA-256 integrity, and durably commits:
+      1. Atomic JPEG file (<node>_<ts>_<nonce8>.jpg)
+      2. Atomic detached signature envelope (<node>_<ts>_<nonce8>.sig.json)
+      3. Flushed & fsynced journal entry (alerts_journal.jsonl)
+      4. Flushed & fsynced replay nonce record (seen_nonces.jsonl)
+    If ANY disk write fails (e.g. ENOSPC full disk), retains pending_meta and pending_chunks
+    and does NOT mark the event completed or burn the nonce, allowing subsequent carousel
+    passes or retries to complete once storage recovers.
     """
     if prefix not in pending_meta or prefix not in pending_chunks:
         return False
 
-    meta = pending_meta[prefix]["meta"]
+    meta_entry = pending_meta[prefix]
+    meta = meta_entry["meta"]
+    raw_meta_bytes = meta_entry.get("raw_meta_bytes")
+    sig_hex = meta_entry.get("sig_hex", "")
+    pubkey_hex = meta_entry.get("pubkey_hex", "")
+    if raw_meta_bytes is None:
+        raw_meta_bytes = json.dumps(meta, separators=(",", ":")).encode("utf-8")
+
     chunk_store = pending_chunks[prefix]
     total = chunk_store["total"]
+    node_id = meta.get("node", "UNKNOWN")
+    ts = int(meta.get("ts", int(time.time())))
+    nonce_val = meta.get("nonce", prefix)
 
     if total == 0:
-        # Valid telemetry-only alert with no image payload
-        completed_prefixes[prefix] = {"nonce": meta.get("nonce", ""), "completed_at": time.time()}
+        try:
+            commit_seen_nonce(node_id, ts, nonce_val, out_dir=OUT_DIR)
+        except OSError as e:
+            print(f"    [!] Storage error persisting nonce for {prefix}: {e}", file=sys.stderr)
+            return False
+        completed_prefixes[prefix] = {"nonce": nonce_val, "completed_at": time.time()}
         del pending_meta[prefix]
         del pending_chunks[prefix]
         return True
@@ -192,43 +280,65 @@ def try_reconstruct_image(prefix):
         computed_sha256 = hashlib.sha256(full_img).hexdigest()
 
         if computed_sha256 == meta.get("img_sha256"):
-            node_id = meta.get("node", "UNKNOWN")
-            ts = meta.get("ts", int(time.time()))
-            nonce_val = meta.get("nonce", prefix)
-            rel_name = f"{node_id}_{ts}_{nonce_val[:8]}.jpg"
+            base_stem = f"{node_id}_{ts}_{nonce_val[:8]}"
+            rel_name = f"{base_stem}.jpg"
+            sig_rel_name = f"{base_stem}.sig.json"
             fname = os.path.join(OUT_DIR, rel_name)
-            try:
-                os.makedirs(OUT_DIR, exist_ok=True)
-                with open(fname, "wb") as f:
-                    f.write(full_img)
-                print(f"    [+] Image verified ({len(full_img)} bytes) -> Saved to {fname}")
-            except OSError as e:
-                print(f"    [!] Storage error writing {fname}: {e}", file=sys.stderr)
-
-            # Structured event logging to JSONL journal
+            sig_fname = os.path.join(OUT_DIR, sig_rel_name)
             journal_path = os.path.join(OUT_DIR, "alerts_journal.jsonl")
+
+            signed_payload_b64 = base64.b64encode(raw_meta_bytes).decode("ascii")
+            sig_envelope = {
+                "node": node_id,
+                "timestamp": ts,
+                "nonce": nonce_val,
+                "image_file": rel_name,
+                "image_sha256": computed_sha256,
+                "image_bytes": len(full_img),
+                "pubkey_hex": pubkey_hex,
+                "signature_hex": sig_hex,
+                "signed_payload_b64": signed_payload_b64,
+            }
+
             alert_entry = {
                 "timestamp": ts,
                 "received_at": int(time.time()),
                 "node": node_id,
                 "nonce": nonce_val,
                 "image_file": f"./verified_alerts/{rel_name}",
+                "sig_file": f"./verified_alerts/{sig_rel_name}",
                 "image_bytes": len(full_img),
-                "image_sha256": meta.get("img_sha256"),
+                "image_sha256": computed_sha256,
                 "detections": meta.get("detections", []),
+                "total_detections": int(meta.get("total_detections", len(meta.get("detections", [])))),
+                "detections_truncated": bool(meta.get("detections_truncated", False)),
                 "pico_trig": meta.get("pico_trig", ""),
                 "camera_ok": meta.get("camera_ok", True),
                 "inference_backend": meta.get("inference_backend", "unknown"),
                 "clock_drift_warning": bool(meta.get("_clock_drift_warning", False)),
-                "verified": True
+                "pubkey_hex": pubkey_hex,
+                "signature_hex": sig_hex,
+                "signed_payload_b64": signed_payload_b64,
+                "verified": True,
             }
+
             try:
+                os.makedirs(OUT_DIR, exist_ok=True)
+                _atomic_write_bytes(fname, full_img)
+                _atomic_write_bytes(sig_fname, (json.dumps(sig_envelope, indent=2) + "\n").encode("utf-8"))
                 with open(journal_path, "a", encoding="utf-8") as jf:
                     jf.write(json.dumps(alert_entry) + "\n")
                     jf.flush()
                     os.fsync(jf.fileno())
-            except OSError:
-                pass
+                commit_seen_nonce(node_id, ts, nonce_val, out_dir=OUT_DIR)
+                print(f"    [+] Image verified ({len(full_img)} bytes) -> Saved to {fname}")
+            except OSError as e:
+                print(
+                    f"    [!] Storage error committing verified alert {prefix} ({fname}): {e}. "
+                    f"Retaining pending buffers for retry.",
+                    file=sys.stderr,
+                )
+                return False
 
             # Optional circular disk retention cap for unattended buried Dead-Drop Collector Vaults
             if MAX_SAVED_ALERTS and MAX_SAVED_ALERTS > 0:
@@ -262,10 +372,12 @@ def try_reconstruct_image(prefix):
     return False
 
 
-def is_valid_fresh_packet(node_id, ts, nonce, strict_clock_skew=True):
+def is_valid_fresh_packet(node_id, ts, nonce, strict_clock_skew=True, commit=True):
     """
     Enforces strict anti-replay protection, non-empty 16-char hex nonce validation,
-    persistent disk nonce caching, and configurable clock-skew handling.
+    persistent disk nonce caching (with zero FIFO eviction), and configurable clock-skew handling.
+    When commit=False (used during packet ingress before image reconstruction), validates
+    freshness without prematurely burning the nonce before the alert is durably written to disk.
     """
     if not nonce or not isinstance(nonce, str) or len(nonce) != 16:
         print(f"[!] Replay/Format rejection: Missing or invalid 16-char hex nonce from {node_id}", file=sys.stderr)
@@ -297,13 +409,12 @@ def is_valid_fresh_packet(node_id, ts, nonce, strict_clock_skew=True):
         print(f"[!] Replay rejection: Duplicate nonce {nonce} detected for {node_id}!", file=sys.stderr)
         return False
 
-    # Store nonce in FIFO order (bound RAM to last 500 nonces) and persist to disk
-    seen[nonce] = ts
-    if len(seen) > 500:
-        seen.popitem(last=False)
-
-    state["last_ts"] = max(state["last_ts"], ts)
-    _persist_seen_nonce(node_id, nonce, ts)
+    if commit:
+        try:
+            commit_seen_nonce(node_id, ts, nonce, out_dir=OUT_DIR)
+        except OSError as e:
+            print(f"[!] Storage error persisting nonce {nonce}: {e}", file=sys.stderr)
+            return False
     return True
 
 
@@ -333,8 +444,14 @@ def process_datagram(pkt, now=None, strict_clock_skew=None):
                 print(f"[!] Rejected alert from unauthorized node: {node_id}", file=sys.stderr)
                 return False
 
-            # Verify Ed25519 cryptographic signature over JSON bytes
-            KNOWN_NODE_PUBKEYS[node_id].verify(meta_bytes, sig)
+            vk = KNOWN_NODE_PUBKEYS[node_id]
+            pubkey_hex = vk.encode().hex()
+            if os.getenv("ALLOW_EXAMPLE_KEYS", "1") == "0" and pubkey_hex.lower() in DEFAULT_EXAMPLE_PUBKEYS:
+                print(f"[!] Rejected example key for node {node_id} (ALLOW_EXAMPLE_KEYS=0)", file=sys.stderr)
+                return False
+
+            # Verify Ed25519 cryptographic signature over exact JSON bytes
+            vk.verify(meta_bytes, sig)
 
             nonce = meta.get("nonce", "")
             img_prefix = meta.get("img_sha256", "")[:16]
@@ -348,16 +465,22 @@ def process_datagram(pkt, now=None, strict_clock_skew=None):
             if prefix in completed_prefixes and completed_prefixes[prefix].get("nonce") == nonce:
                 return True
 
-            # Anti-replay check for genuinely new alert bursts
+            # Anti-replay check for genuinely new alert bursts (commit=False until durable image+journal write)
             ts = meta.get("ts", int(now))
             if abs(now - ts) > MAX_CLOCK_SKEW_SEC:
                 meta["_clock_drift_warning"] = True
-            if not is_valid_fresh_packet(node_id, ts, nonce, strict_clock_skew=strict_clock_skew):
+            if not is_valid_fresh_packet(node_id, ts, nonce, strict_clock_skew=strict_clock_skew, commit=False):
                 return False
 
             if prefix and prefix not in pending_meta:
                 _enforce_queue_cap(pending_meta, MAX_PENDING_FRAMES)
-                pending_meta[prefix] = {"meta": meta, "created_at": now}
+                pending_meta[prefix] = {
+                    "meta": meta,
+                    "raw_meta_bytes": meta_bytes,
+                    "sig_hex": sig.hex(),
+                    "pubkey_hex": pubkey_hex,
+                    "created_at": now,
+                }
                 print(f"[+] VERIFIED ALERT from [{node_id}] | Detections: {meta.get('detections')} | Trigger: {meta.get('pico_trig')}")
                 # Trigger reconstruction in case chunks arrived before this metadata packet
                 try_reconstruct_image(prefix)
@@ -372,7 +495,7 @@ def process_datagram(pkt, now=None, strict_clock_skew=None):
     # ----------------------------------------------------------------------
     elif pkt_type == 2 and len(pkt) > 15:
         prefix = pkt[3:11].hex()
-        # Ignore redundant Pass 2 / Pass 3 chunks for already-reconstructed bursts
+        # Ignore redundant Pass 2 / Pass 3 chunks for already-committed bursts
         if prefix in completed_prefixes:
             return True
 
@@ -449,7 +572,7 @@ def run_hub(port=UDP_PORT, bind_addr="0.0.0.0", out_dir=OUT_DIR, max_clock_skew=
 
     while True:
         try:
-            pkt, _ = sock.recvfrom(2048)
+            pkt, _ = sock.recvfrom(MAX_DATAGRAM_BYTES)
         except socket.timeout:
             now = time.time()
             write_receiver_heartbeat(port=port, out_dir=OUT_DIR)
@@ -478,7 +601,8 @@ def run_hub(port=UDP_PORT, bind_addr="0.0.0.0", out_dir=OUT_DIR, max_clock_skew=
 
 def enforce_storage_retention(out_dir=None, max_files=None):
     """
-    Prunes the oldest saved .jpg files in out_dir when total count exceeds max_files.
+    Prunes the oldest saved .jpg files (and companion .sig.json envelopes) in out_dir
+    when total count exceeds max_files.
     Designed for unattended off-grid 'Dead-Drop' Collector Vaults running for months.
     """
     target_dir = out_dir or OUT_DIR
@@ -500,6 +624,9 @@ def enforce_storage_retention(out_dir=None, max_files=None):
             try:
                 os.remove(p)
                 removed += 1
+                sig_p = p[:-4] + ".sig.json"
+                if os.path.exists(sig_p):
+                    os.remove(sig_p)
             except OSError:
                 pass
         return removed
@@ -509,9 +636,9 @@ def enforce_storage_retention(out_dir=None, max_files=None):
 
 def export_dead_drop_bundle(bundle_path, out_dir=None):
     """
-    Packages all verified JPEGs, alerts_journal.jsonl, seen_nonces.jsonl, and
-    authorized_nodes.json from out_dir into a portable ZIP archive for rapid
-    field extraction from an unattended Dead-Drop Collector Vault.
+    Packages all verified JPEGs, detached .sig.json envelopes, alerts_journal.jsonl,
+    seen_nonces.jsonl, and authorized_nodes.json from out_dir into a portable ZIP archive
+    for rapid field extraction from an unattended Dead-Drop Collector Vault.
     """
     import zipfile
     target_dir = out_dir or OUT_DIR
@@ -526,6 +653,144 @@ def export_dead_drop_bundle(bundle_path, out_dir=None):
                     zf.write(full_p, arcname=fname)
                     count += 1
     return count
+
+
+def verify_stored_alert(alert_record, out_dir=None, pubkeys_map=None):
+    """
+    Independently verifies a stored alert record (from alerts_journal.jsonl or .sig.json)
+    and its corresponding JPEG file on disk against the sender's Ed25519 public key.
+    Returns True only if:
+      1. The Ed25519 signature over the exact original signed JSON payload bytes is valid;
+      2. The journal record fields (node, timestamp, nonce, image_sha256, detections) match
+         the signed JSON payload (detecting any post-hoc journal tampering); and
+      3. The JPEG file on disk matches the signed img_sha256 digest (detecting any image tampering).
+    """
+    target_dir = out_dir or OUT_DIR
+    if isinstance(alert_record, str):
+        # Path to .sig.json or .jpg
+        sig_path = alert_record[:-4] + ".sig.json" if alert_record.lower().endswith(".jpg") else alert_record
+        with open(sig_path, "r", encoding="utf-8") as f:
+            alert_record = json.load(f)
+
+    node_id = alert_record.get("node")
+    sig_hex = alert_record.get("signature_hex", "")
+    payload_b64 = alert_record.get("signed_payload_b64", "")
+    if not node_id or not sig_hex or not payload_b64:
+        return False
+
+    try:
+        sig_bytes = bytes.fromhex(sig_hex)
+        raw_meta_bytes = base64.b64decode(payload_b64)
+        signed_meta = json.loads(raw_meta_bytes.decode("utf-8"))
+    except Exception:
+        return False
+
+    # Resolve public key from explicit map, KNOWN_NODE_PUBKEYS, or record pubkey_hex
+    vk = None
+    if pubkeys_map and node_id in pubkeys_map:
+        key_val = pubkeys_map[node_id]
+        vk = key_val if isinstance(key_val, VerifyKey) else VerifyKey(bytes.fromhex(key_val))
+    elif node_id in KNOWN_NODE_PUBKEYS:
+        vk = KNOWN_NODE_PUBKEYS[node_id]
+    elif alert_record.get("pubkey_hex"):
+        try:
+            vk = VerifyKey(bytes.fromhex(alert_record["pubkey_hex"]))
+        except Exception:
+            return False
+
+    if vk is None:
+        return False
+
+    # 1. Verify Ed25519 cryptographic signature over original signed JSON bytes
+    try:
+        vk.verify(raw_meta_bytes, sig_bytes)
+    except Exception:
+        return False
+
+    # 2. Verify record fields were not altered relative to the signed payload
+    if signed_meta.get("node") != node_id:
+        return False
+    if int(signed_meta.get("ts", -1)) != int(alert_record.get("timestamp", alert_record.get("ts", -2))):
+        return False
+    if signed_meta.get("nonce") != alert_record.get("nonce"):
+        return False
+    expected_sha256 = signed_meta.get("img_sha256")
+    if expected_sha256 != alert_record.get("image_sha256"):
+        return False
+    if "detections" in alert_record and signed_meta.get("detections", []) != alert_record.get("detections", []):
+        return False
+
+    # 3. Verify JPEG file on disk matches the signed SHA-256 hash
+    img_ref = alert_record.get("image_file", "")
+    img_basename = os.path.basename(img_ref)
+    img_path = os.path.join(target_dir, img_basename)
+    if not os.path.isfile(img_path):
+        return False
+    try:
+        with open(img_path, "rb") as imgf:
+            img_bytes = imgf.read()
+    except OSError:
+        return False
+
+    if hashlib.sha256(img_bytes).hexdigest() != expected_sha256:
+        return False
+
+    return True
+
+
+def verify_exported_bundle(bundle_or_dir, pubkeys_map=None):
+    """
+    Verifies every alert in an alert directory or exported Dead-Drop .zip bundle.
+    Returns (verified_count, failed_count).
+    """
+    import tempfile
+    import shutil
+    import zipfile
+
+    cleanup_dir = None
+    if os.path.isfile(bundle_or_dir) and bundle_or_dir.lower().endswith(".zip"):
+        cleanup_dir = tempfile.mkdtemp(prefix="trailcam_verify_bundle_")
+        with zipfile.ZipFile(bundle_or_dir, "r") as zf:
+            zf.extractall(cleanup_dir)
+        target_dir = cleanup_dir
+    else:
+        target_dir = bundle_or_dir
+
+    try:
+        local_keys = dict(pubkeys_map) if pubkeys_map else {}
+        auth_file = os.path.join(target_dir, "authorized_nodes.json")
+        if not local_keys and os.path.isfile(auth_file):
+            with open(auth_file, "r", encoding="utf-8") as af:
+                local_keys = json.load(af)
+
+        journal_path = os.path.join(target_dir, "alerts_journal.jsonl")
+        if not os.path.isfile(journal_path):
+            return (0, 1)
+
+        verified_count = 0
+        failed_count = 0
+        with open(journal_path, "r", encoding="utf-8") as jf:
+            for line in jf:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except Exception:
+                    failed_count += 1
+                    continue
+                img_basename = os.path.basename(rec.get("image_file", ""))
+                # Skip records whose JPEG was intentionally pruned by circular retention
+                if not os.path.exists(os.path.join(target_dir, img_basename)) and MAX_SAVED_ALERTS > 0:
+                    continue
+                if verify_stored_alert(rec, out_dir=target_dir, pubkeys_map=local_keys):
+                    verified_count += 1
+                else:
+                    failed_count += 1
+        return (verified_count, failed_count)
+    finally:
+        if cleanup_dir:
+            shutil.rmtree(cleanup_dir, ignore_errors=True)
 
 
 def valid_port(value):
@@ -585,6 +850,12 @@ def main():
         default="",
         help="Export all verified JPEGs and journals from --out-dir into the specified .zip file and exit"
     )
+    parser.add_argument(
+        "--verify-bundle",
+        type=str,
+        default="",
+        help="Cryptographically verify all stored alerts in a directory or exported .zip bundle and exit"
+    )
     args = parser.parse_args()
     MAX_SAVED_ALERTS = args.max_alerts
 
@@ -592,6 +863,11 @@ def main():
         n_files = export_dead_drop_bundle(args.export_bundle, out_dir=args.out_dir)
         print(f"[+] Exported {n_files} verified artifacts from '{args.out_dir}' to '{args.export_bundle}'")
         return
+
+    if args.verify_bundle:
+        ok, bad = verify_exported_bundle(args.verify_bundle)
+        print(f"[*] Bundle Verification: {ok} verified, {bad} failed")
+        sys.exit(0 if (ok > 0 and bad == 0) else 1)
 
     run_hub(
         port=args.port,
@@ -604,5 +880,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 

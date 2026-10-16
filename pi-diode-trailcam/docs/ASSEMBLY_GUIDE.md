@@ -27,7 +27,7 @@ The **Zone 1 Micro-Pod** is the tiny, fist-sized black ABS box (`112 × 62 × 31
 
 ### Parts & Tools Used in Stage 4
 
-* **Parts:** `[P05]` (`Arducam IMX708 NoIR` Camera — `$44.99`), `[P06]` (Camera Ribbon — `$9.99`), `[P11]` (`HLK-LD2450` $24\text{ GHz}$ Radar PCB + Harness — `$10.94`), `[P20]` (`Hammond 1591BSBK` Black ABS Box `$7.45` + `30 mm` Glass Disc `$6.49` + Black Neoprene Foam Ring `$7.99` + `33-Ohm` PTC Heater Resistor `$1.99` + `M12 IP68` bottom cable gland `$1.99` = `$25.91`), `[P22]` (`Rust-Oleum` Ultra-Flat Earth Brown `$8.98` & Deep Forest Green `$8.98` spray paint + `Gear Aid Camo Form` `$14.95` = `$32.91`).
+* **Parts:** `[P05]` (`Arducam IMX708 NoIR` Camera — `$44.99`), `[P06]` (`200 mm` `22-to-15-pin` Ribbon `$9.99` + **`Arducam CSI-to-HDMI Extension Kit w/ 2.0 m Shielded Cable` `ASIN B06XDNBM63` `$18.99` for 2 m split-pod umbilical**), `[P11]` (`HLK-LD2450` $24\text{ GHz}$ Radar PCB + Harness — `$10.94`), `[P20]` (`Hammond 1591BSBK` Black ABS Box `$7.45` [factory `IP54` lap-joint; requires `Permatex 81158` perimeter lid-channel silicone gasket] or drop-in **`Hammond 1554EGY` factory `IP68` gasketed box** `$13.50` + `30 mm` Glass Disc `$6.49` + Black Neoprene Foam Ring `$7.99` + **`39-Ohm 5W` Ceramic De-Icer Resistor (`3.69 W` @ `12.0V`)** `$1.99` + `M12 IP68` bottom cable gland `$1.99` = `$25.91`), `[P22]` (`Rust-Oleum` Ultra-Flat Earth Brown `$8.98` & Deep Forest Green `$8.98` spray paint + `Gear Aid Camo Form` `$14.95` = `$32.91`).
 * **Tools:** `[T04]` (Cordless drill with `Forward / Reverse`), `[T05]` (`1-1/8"` / `28 mm` Bi-Metal Hole Saw Cup + Center Pilot Drill Bit), `[T06]` (Center awl/nail + `4–22 mm` Titanium Cone Step Drill Bit for `12 mm` bottom hole), `[T07]` (`#1` Phillips screwdriver & pliers), `[T10]` (Scissors/craft knife, ruler, file & `400-grit` sandpaper), `[T11]` (Black waterproof silicone, rubbing alcohol, `3M` blue painter's tape & sea sponge), `[T12]` (Safety glasses & gloves).
 
 ### Step 4.1 — Drill the Single `28 mm` Viewport Window & `12 mm` Bottom Cable Hole
@@ -41,30 +41,35 @@ The **Zone 1 Micro-Pod** is the tiny, fist-sized black ABS box (`112 × 62 × 31
    * **Step A (Pilot Hole in `FORWARD`):** Set the drill to **`FORWARD`**, place the tip of the central `1/4"` pilot drill bit into your center dimple, and drill straight down at medium speed until the center pilot bit pokes through the plastic—**STOP immediately before the outer circular saw teeth touch the lid!**
    * **Step B (Outer Circle in `REVERSE` — Zero Cracks!):** Flip your drill's direction switch to **`REVERSE`** (`counter-clockwise`). Hold the box steady and spin the hole saw in **`REVERSE`** at medium speed with gentle downward pressure. The backwards-spinning teeth will score and shear a glass-smooth `28 mm` circle through the `2 mm` ABS plastic in ~15 seconds without grabbing or cracking the box!
    * Wipe away any plastic fuzz around the rim with your half-round file or `400-grit` sandpaper (`[T10]`).
-   * **DO NOT drill a hole for the radar in the lower half!** The `HLK-LD2450` $24\text{ GHz}$ radar (`[P11]`) sees straight through the solid `2 mm` unpainted/non-metallic ABS plastic wall with $<0.4\text{ dB}$ loss. Keeping the lower front face solid makes the pod 100% waterproof and invisible.
+   * **DO NOT drill a hole for the radar in the lower half!** The `HLK-LD2450` $24\text{ GHz}$ radar (`[P11]`) sees straight through the solid `2 mm` unpainted/non-metallic ABS plastic wall with $<0.4\text{ dB}$ loss. Keeping the lower front face solid prevents water entry over the radar.
 4. **Drill the `12 mm` (`1/2"`) Bottom Umbilical Hole (`Hole 2`):**
    * On the **bottom narrow end-wall** of the box (`62 × 31 mm` bottom face), press a center dimple (`[T06]`) dead-center (`31 mm` from left/right, `15.5 mm` from front/back).
    * Put the **Titanium Cone Step Drill Bit (`[T06]`)** into your drill (`[T04]`), drill straight down until you reach the **`12 mm` (`1/2"`) step**, and stop.
    * Thread the small **`M12 / PG7 IP68` waterproof cable gland** into the bottom hole and snug the inside locknut with your pliers (`[T07]`).
 
-### Step 4.2 — Glue the Glass Window & Press In the Black Neoprene Foam Baffle Ring
+### Step 4.2 — Glue the Glass Window, Install the Foam Baffle & Mount the `39 Ω, 5W` De-Icer
 
 1. Wipe the inside rim of the `28 mm` circular hole with a drop of rubbing alcohol (`[T11]`) and let it dry for 1 minute.
-2. Squeeze a thin, continuous bead of black weatherproof silicone or 2-part epoxy (`[T11]`) around the inside rim of the `28 mm` hole, press the **`28 mm` Sapphire / AR Borosilicate Glass Disc (`[P20]`)** flat against the inside face, and let it cure.
+2. Squeeze a thin, continuous bead of `Permatex 81158` black weatherproof silicone (`[T11]`) around the inside rim of the `28 mm` hole, press the **`30 mm` Mineral Glass Disc (`[P20]`)** flat against the inside face, and let it cure.
 3. **Install the Anti-Glare Neoprene Foam Ring (`✓ CRITICAL FOR NIGHT VISION`):**
    * Using your scissors or craft knife (`[T10]`) and the `1:1` template in `Panel B`, check or cut your **black closed-cell neoprene foam donut ring (`22 mm` outer diameter, `12 mm` inner hole, `5–6 mm` thick, `[P20]`)**.
    * Pick up the **`Arducam IMX708 NoIR` camera board (`[P05]`)**. Notice it has **1 square camera lens in the center** and **2 rectangular `940 nm` IR LEDs** on the left and right sides.
    * Press the **black neoprene foam ring (`[P20]`)** directly around the **central camera lens barrel** so the foam sits **between** the central lens and the two side `940 nm` IR LEDs.
    * When you mount the camera board behind the `28 mm` glass window (`4× M2` nylon standoffs), the black foam ring presses flush against the inside of the glass. This creates a light-tight tunnel around the central lens so the side `940 nm` IR LEDs illuminate the trail outside without bouncing sideways through the glass into the lens!
-4. Press the small **`33-Ohm` (`2W`) de-icer resistor (`[P20]`)** against the lower inside edge of the glass window with a dab of thermal tape (`0.75 W` gentle warmth during `4 s` pre-capture de-ice).
+4. **Mount the `39 Ω, 5W` Window De-Icer Resistor (`3.69 W` @ `12.0V`, `[P20]`):**
+   * Bond the **`39 Ω, 5W` ceramic de-icer resistor (`[P20]`)** against the lower inside edge of the glass window (outside the foam ring) with thermal tape. Driven from the switched `+12.0V` rail via `STEMMA Relay #2` (`GP16`), it delivers $P = 12.0^2 / 39\,\Omega = 3.69\text{ W}$ (`~3.6 W`, `308 mA`, operating safely at $74\%$ of its `5.0 W` continuous rating during the `4.0 s` sub-zero pre-capture pulse).
+   * Connect the short `15-pin` camera ribbon from `Arducam IMX708 NoIR [P05]` into the **`Arducam CSI-to-HDMI Pod Adapter (`ASIN B06XDNBM63`, `[P06]`)** inside the upper bay (and land the two `39 Ω` heater leads on the adapter's `AUX1`/`AUX2` pass-through pads).
 
-### Step 4.3 — Mount the `HLK-LD2450` $24\text{ GHz}$ Radar (`[P11]`) in the Lower Bay
+### Step 4.3 — Mount the `HLK-LD2450` $24\text{ GHz}$ Radar (`[P11]`), Route the `2.0 m` Umbilical & Gasket-Seal the Lid
 
 1. Place the **`HLK-LD2450` radar board (`[P11]`)** inside the **lower half** of the `Hammond 1591BSBK` box, below the camera board.
 2. **Which way it fits (`✓ CORRECT`):**
    * The flat side of the radar board with the **shiny copper patch antenna rectangles** MUST face **FORWARD** (flat against the solid inside front wall of the black plastic box, pointing toward the trail).
    * Secure it with double-sided foam tape or nylon standoffs.
-3. Route the `2 m` shielded umbilical cable (carrying the camera link, radar `5V / GND / TX / RX`, and heater wires) out through the bottom `M12 IP68` gland and tighten the outer dome sealing nut (`[T07]`) until the rubber seal grips the cable jacket snugly.
+3. **Route the `2.0 m` Shielded Umbilical Harness (`[P06]` + `[P11]`):**
+   * Feed the **`2.0 m` shielded `CSI-to-HDMI` camera/heater cable (`[P06]`)** and the 4-wire `2.0 m` `HLK-LD2450` radar cable (`5V_RADAR_SW`, `GND`, `UART0_TX`, `UART0_RX`, `[P11]`) out through the bottom `M12 IP68` gland and tighten the outer dome sealing nut (`[T07]`) until the rubber seal grips the jacket snugly.
+4. **Seal the Enclosure Lid Joint (`IP54` Factory Disclosure & Silicone Gasket Procedure):**
+   * **Important Engineering Note:** Hammond rates the unmodified **`1591BSBK` at `IP54`** (splash-resistant lap-joint lid without a factory elastomer gasket). Before closing the lid for outdoor tree use, lay a continuous `1.5 mm` bead of **`Permatex 81158` black silicone (`[T11]`)** along the perimeter tongue-and-groove channel of the `1591BSBK` lid and tighten all 4 corner screws evenly. *(For deployments requiring a factory-certified `IP68` gasketed enclosure without manual lid sealing, use the drop-in **`Hammond 1554EGY`** listed in `[P20]`.)*
 
 ### Step 4.4 — Camouflage-Paint the Zone 1 Pod Like Pine Bark (`[P22]`)
 
@@ -76,7 +81,7 @@ The **Zone 1 Micro-Pod** is the tiny, fist-sized black ABS box (`112 × 62 × 31
 
 ---
 
-## STAGE 5: Pack & Wire the Zone 3 Moss-Buried Base Vault (`QILIPSU IP67` `[P21]`)
+## STAGE 5: Pack, Wire & Commission the Zone 3 Moss-Buried Base Vault (`QILIPSU IP67` `[P21]`)
 
 The **Zone 3 Base Vault** sits on the ground in a root hollow at the base of the pine tree, hidden under `2 cm` of moss and pine needles. It holds the heavy `12V 12Ah` battery (`[P17]`), the `Pico 2` gatekeeper (`[P07]`), the `Raspberry Pi 5` (`[P01]`), and the `1×2` Optical Data Diode (`[P13]`–`[P15]`).
 
@@ -96,14 +101,14 @@ Look at the exact physical layout in the diagram below—it matches your physica
 2. Open the hinged lid of the **`QILIPSU IP67` enclosure (`[P21]`)** and screw the white ABS grid mounting plate into the back of the box using the 4 included corner Phillips screws (`[T07]`).
 3. Place the **`ExpertPower 12V 12Ah` AGM battery (`[P17]`)** horizontally across the **bottom third of the enclosure** (terminals facing up toward the middle of the box). Wrap a heavy-duty Velcro cinch strap (`[T12]`) through the white grid slots around the battery belly so it cannot shift when carrying the box.
 
-### Step 5.2 — Mount the Middle Row (`Pico 2`, `5V Buck`, `Relay`, `Pi 5`) & Top Row (`Fiber Diode`)
+### Step 5.2 — Mount the Middle Row (`Pico 2`, `5V Buck`, `Switches`, `Pi 5`) & Top Row (`Fiber Diode`)
 
 Using M2.5/M3 nylon standoffs or heavy-duty 3M Dual-Lock strips on the white grid backplate **above the battery**:
 
 1. **Middle Row (Left to Right, directly above the battery):**
-   * **Far Left:** Mount the **`Pico 2` (`[P07]`)** + **`QMC5883L` (`[P08]`)** + optional **`ADS1115` (`[P11]`)** on your compact breadboard/perma-proto carrier, alongside the tiny **`Adafruit MPM3610` `5V` Buck Converter (`[P12]` — Domain A Always-On Power)**.
-   * **Center-Left:** Mount the **`Adafruit STEMMA` High-Side Relay (`[P12]`)** and the **`12V-to-5V 5A` Buck Converter (`[P12]` — Domain B Switched Power)**.
-   * **Center-Right:** Mount the **`Raspberry Pi 5` (`[P01]`)** with its **Active Cooler (`[P02]`)**, **`Hailo-8L` AI HAT+ (`[P03]`)**, and **`Panasonic ML2020` `J5` RTC battery (`[P03]`)** plugged into the tiny 2-pin `BAT` socket near the USB-C port.
+   * **Far Left:** Mount the **`Pico 2` (`[P07]`)** + **`QMC5883L` (`[P08]`)** + optional **`ADS1115` (`[P11-SEIS]`)** on your compact breadboard/perma-proto carrier, alongside the tiny **`Adafruit MPM3610` `5V` Buck Converter (`[P12]` — Domain A Always-On Power)** and the **`Pololu 2810` High-Side MOSFET Switch (`[P12]` — `GP6` Radar Power Switch)**.
+   * **Center-Left:** Mount **`Adafruit STEMMA` High-Side Relay #1 (`GP15` Domain B Power)**, **`STEMMA` High-Side Relay #2 (`GP16` `12V` Window De-Icer Switch)**, and the **`12V-to-5V 5A` Buck Converter (`[P12]` — Domain B Switched Power)**.
+   * **Center-Right:** Mount the **`Raspberry Pi 5` (`[P01]`)** with its **Active Cooler (`[P02]`)**, **`Panasonic ML2020` `J5` RTC battery (`[P03]`)**, and **`Arducam CSI-to-HDMI Base Adapter (`[P06]`)** connected to `Pi 5 CAM/DISP 0` via the `200 mm` `22-to-15-pin` ribbon. Plug the `2.0 m` Zone 2 shielded HDMI umbilical cable (entering through the bottom-left `M20` gland) into the `CSI-to-HDMI Base Adapter`.
 2. **Top Row (Left to Right, at the very top of the white grid plate):**
    * **Top-Left:** Mount **Field Media Converter #1 (`StarTech MCMGBSCSM10` `[P13]`)** and connect a short `15 cm` Cat6 patch cable from the **Pi 5 Ethernet port** to **Media Converter #1 `RJ45`**.
    * **Top-Right:** Secure the **Yellow `1×2 SC/UPC` Optical Splitter (`[P14]`)** and **Blue `Cable Matters SC/UPC` Coupler (`[P15]`)** in gentle loops ($\ge 30\text{ mm}$ radius, wider than a soda can):
@@ -111,23 +116,25 @@ Using M2.5/M3 nylon standoffs or heavy-duty 3M Dual-Lock strips on the white gri
      * Plug Splitter Output 1 $\rightarrow$ **Media Converter #1 `RX`** (local carrier-detect loopback).
      * Plug Splitter Output 2 $\rightarrow$ **Blue `SC/UPC` Coupler (`[P15]`)** $\rightarrow$ **Outbound `3 mm` Black Armored Fiber Cable (`[P16]`)** exiting through the bottom-right `M20 IP68` gland.
 
-### Step 5.3 — Wire the Two Power Domains (`Domain A` Always-On vs. `Domain B` Switched)
+### Step 5.3 — Wire the Two Power Domains (`Domain A` Always-On vs. `Domain B` Switched + Radar/Heater Switches)
 
 Using your **Wire Stripper & Crimping Pliers (`[T08]`)** and **`2.5 mm` Flathead / `#1` Phillips Screwdriver (`[T07]`)**, with the **`5A` tan blade fuse (`[P18]`) REMOVED from its fuse holder**, make the power connections below:
 
 | Step | Wire From... | Wire To... | Why / Orientation Check |
 | :---: | :--- | :--- | :--- |
 | **`[Pwr 1]`** | **Battery `Red (+)` Spade Clip** | **Input wire of `Littelfuse` Holder (`[P18]`)** *(within `10 cm` of battery `+` tab)* | Protects the entire box if any wire ever shorts. |
-| **`[Pwr 2]`** | **Output wire of `Littelfuse` Holder (`[P18]`)** | Both **`MPM3610` `VIN (+)`** AND **`STEMMA` Relay `COM` (Common) screw terminal** | Feeds `+12V` to always-on Pico buck and to the relay input contact. |
-| **`[Pwr 3]`** | **Battery `Black (-)` Spade Clip** | Common **`GND` Bus Strip** (`MPM3610 GND`, `Pico GND Pin 38`, `Relay GND`, and `5V 5A Buck GND (-)`) | Every single board MUST share the same `Black (-)` Ground reference! |
-| **`[Pwr 4]`** | **`MPM3610` `5V OUT (+)`** | **`Pico 2` `VBUS` (`Pin 40` = Right-side `Row 1`)** | Powers the `Pico 2` gatekeeper continuously at `<4 mW`. |
-| **`[Pwr 5]`** | **`Pico 2` `GP15` (`Pin 20` = Left-side `Row 20`)** | **`STEMMA` Relay `SIGNAL (IN)` pin** *(plus `3V3` to Relay `VCC`)* | Lets the Pico turn the heavy Pi 5 + Fiber Converter ON and OFF. |
-| **`[Pwr 6]`** | **`STEMMA` Relay `NO` (Normally Open) screw terminal** | **`+12V IN (+)` of the `12V-to-5V 5A` Buck Converter (`[P12]`)** | Sends `+12V` to the heavy `5V 5A` buck **only** when the relay closes! |
+| **`[Pwr 2]`** | **Output wire of `Littelfuse` Holder (`[P18]`)** | **`MPM3610` `VIN (+)`**, **`STEMMA` Relay #1 `COM`**, AND **`STEMMA` Relay #2 `COM`** | Feeds fused `+12V` to always-on Pico buck and both high-side relay inputs. |
+| **`[Pwr 3]`** | **Battery `Black (-)` Spade Clip** | Common **`GND` Bus Strip** (`MPM3610 GND`, `Pico GND Pin 38`, `Relays GND`, `5V 5A Buck GND (-)`, Radar `GND`, Heater `-`) | Every single board MUST share the same `Black (-)` Ground reference! |
+| **`[Pwr 4]`** | **`MPM3610` `5V OUT (+)`** | **`Pico 2` `VBUS` (`Pin 40` = Right-side `Row 1`)** AND **`Pololu 2810` Radar Switch `VIN`** | Powers the `Pico 2` gatekeeper continuously at `<4 mW` and supplies `+5V` to the radar switch input. |
+| **`[Pwr 5]`** | **`Pico 2` `GP15` (`Pin 20` = Left-side `Row 20`)** | **`STEMMA` Relay #1 `SIGNAL (IN)` pin** *(plus `3V3` to Relay `VCC`)* | Lets the Pico turn the heavy Pi 5 + Fiber Converter ON and OFF. |
+| **`[Pwr 6]`** | **`STEMMA` Relay #1 `NO` (Normally Open) screw terminal** | **`+12V IN (+)` of the `12V-to-5V 5A` Buck Converter (`[P12]`)** | Sends `+12V` to the heavy `5V 5A` buck **only** when Relay #1 closes! |
 | **`[Pwr 7]`** | **`+5.0V DC OUT` of the `12V-to-5V 5A` Buck Converter** | **Both** the **Pi 5 USB-C power plug** AND the **`StarTech` Media Converter #1 `5V` barrel cable (`[P19]`)** | **CRITICAL:** Both the Pi 5 and the `StarTech` Media Converter receive **strictly regulated `+5.0V DC`**—never `12V`! |
+| **`[Pwr 8]`** | **`Pico 2` `GP6` (`Pin 9` = Left-side `Row 9`)** | **`Pololu 2810` Switch `CTRL/ON` pin**; Switch **`VOUT`** $\rightarrow$ **Zone 1 `HLK-LD2450` Radar `5V` (`[P11]`)** | Switches the `180 mA` `+5V` radar load cleanly from `3.3 V` logic (`0.00 W` radar standby in Eco mode). |
+| **`[Pwr 9]`** | **`Pico 2` `GP16` (`Pin 21` = Right-side `Row 20`)** | **`STEMMA` Relay #2 `SIGNAL (IN)`**; Relay #2 **`NO`** $\rightarrow$ **Zone 1 `39 Ω, 5W` De-Icer Resistor (`+`)** (`[P20]`) | Pulses `+12.0V` (`3.69 W` / `308 mA`) into the `39 Ω, 5W` window heater for `4.0 s` only when sub-zero & humid. |
 
 Also confirm your sensor & handshake wires on the Pico 2 (`[P07]`):
-* **Magnetometer (`QMC5883L` `[P08]`) & Seismic ADC (`ADS1115` `[P11]`):** `3V3_OUT (Pin 36 / Right Row 5)` $\rightarrow$ `VCC`; `GND (Pin 38 / Right Row 3)` $\rightarrow$ `GND`; `GP4 (Pin 6 / Left Row 6)` $\rightarrow$ `SDA`; `GP5 (Pin 7 / Left Row 7)` $\rightarrow$ `SCL`.
-* **Radar (`HLK-LD2450` `[P11]`):** `GP0 (Pin 1 / Left Row 1)` $\rightarrow$ Radar `RX`; `GP1 (Pin 2 / Left Row 2)` $\rightarrow$ Radar `TX`; `GP6 (Pin 9 / Left Row 9)` $\rightarrow$ Radar `5V` switch control.
+* **Magnetometer (`QMC5883L` `[P08]`) & Seismic ADC (`ADS1115` `[P11-SEIS]`):** `3V3_OUT (Pin 36 / Right Row 5)` $\rightarrow$ `VCC`; `GND (Pin 38 / Right Row 3)` $\rightarrow$ `GND`; `GP4 (Pin 6 / Left Row 6)` $\rightarrow$ `SDA`; `GP5 (Pin 7 / Left Row 7)` $\rightarrow$ `SCL`.
+* **Radar (`HLK-LD2450` `[P11]`):** `GP0 (Pin 1 / Left Row 1)` $\rightarrow$ Radar `RX`; `GP1 (Pin 2 / Left Row 2)` $\rightarrow$ Radar `TX`; `GP6 (Pin 9 / Left Row 9)` $\rightarrow$ `Pololu 2810` Radar `+5V` switch control (`[Pwr 8]`).
 * **Pi 5 Handshake (`UART1` + `DONE`):** `GP8 (Pin 11 / Left Row 11)` $\rightarrow$ Pi 5 `Pin 10 (GPIO15 RX)`; Pi 5 `Pin 16 (GPIO23)` $\rightarrow$ Pico `GP17 (Pin 22 / Right Row 19)` (or `GP2` `Pin 4 / Left Row 4`); `GND (Pin 13 / Left Row 13)` $\rightarrow$ Pi 5 `Pin 14 (GND)`.
 
 ### Step 5.4 — The Mandatory Multimeter `+5.0V DC` Safety Check (`[T09]`)
@@ -140,10 +147,32 @@ Also confirm your sensor & handshake wires on the Pico 2 (`[P07]`):
 3. Turn your **Digital Multimeter (`[T09]`)** dial to **`DC Volts (V= / 20V)`**:
    * **Check 1 (Battery):** Touch Red probe to Fuse output and Black probe to Battery `Black (-)`. You should read **`+12.4V` to `+13.0V DC`**.
    * **Check 2 (Domain A — Pico 5V):** Touch Red probe to `MPM3610 5V OUT` (`Pico Pin 40`) and Black probe to `GND`. You should read **`+4.95V` to `+5.15V DC`**.
-   * **Check 3 (Domain B — Pi 5 & Converter 5V):** Wave your screwdriver (`[T03]`) over the magnetometer/radar so the `STEMMA` relay clicks ON (its red LED lights up). Touch Red probe to the `5V 5A` buck output (and the center hole of the Media Converter barrel plug `[P19]`) and Black probe to `GND`. Confirm it reads **strictly `+4.95V` to `+5.15V DC`** (never `12V`!).
+   * **Check 3 (Domain B — Pi 5 & Converter 5V):** Wave your screwdriver (`[T03]`) over the magnetometer/radar so `STEMMA` Relay #1 clicks ON (its red LED lights up). Touch Red probe to the `5V 5A` buck output (and the center hole of the Media Converter barrel plug `[P19]`) and Black probe to `GND`. Confirm it reads **strictly `+4.95V` to `+5.15V DC`** (never `12V`!).
 4. Remove the `5A` fuse, plug the USB-C power plug into the Pi 5 and the `5V` barrel plug into Media Converter #1, and put the `5A` fuse back in.
-5. **What you should see (`✓ STAGE 5 SUCCESS CHECK`):**
-   * When you trigger the sensor, the relay clicks ON, the Pi 5 and Media Converter #1 boot in $<7\text{ seconds}$, send the signed JPEG alert over fiber, assert the `DONE` pin (`GPIO23`), and the relay immediately clicks OFF (`0.00 W` Pi draw in standby)!
+
+### Step 5.5 — Autonomous Field Commissioning: Provision Unique Node Keys & Install `diode-node.service`
+
+Before closing the `QILIPSU` vault for unattended field operation, transition the `Raspberry Pi 5 [P01]` from manual bench mode to **autonomous cold-boot service execution** (`ALLOW_EXAMPLE_KEYS=0`, unique `Ed25519` node identity, hardware Wi-Fi/BT disabled, and read-only `OverlayFS` enabled):
+
+1. **Generate the Unique `Ed25519` Keypair & Node Identity on `Raspberry Pi 5 [P01]`:**
+   ```bash
+   cd ~/pi-diode-trailcam/pi5_sender_node
+   python3 generate_keys.py CAMERA-NORTH-01
+   ```
+   * This writes `node_key.json` (containing both `"node_id": "CAMERA-NORTH-01"` and `"private_key_hex"`) and prints the public-key registry snippet.
+2. **Register the Node's Public Key on Your Cabin Collector Hub (`[T02]`):**
+   * Copy the printed `CAMERA-NORTH-01` public key entry into `pi-diode-trailcam/collector_hub/authorized_nodes.json` on your Collector laptop/hub. *(Once `authorized_nodes.json` is present on the Collector Hub, `receiver_hub.py` automatically clears the demo `NODE-NORTH-01` example key and trusts **only** the provisioned nodes in `authorized_nodes.json`.)*
+3. **Run the One-Command Production Fast-Boot & Service Installer on `Raspberry Pi 5 [P01]`:**
+   ```bash
+   sudo bash install_pi5_fastboot.sh CAMERA-NORTH-01
+   ```
+   * **What `install_pi5_fastboot.sh` configures automatically:**
+     1. Copies `/opt/trailcam/sender_node.py`, installs `/etc/trailcam/node_key.json` (`chmod 600`), and writes `/etc/trailcam/node.env` (`NODE_ID=CAMERA-NORTH-01`, `ALLOW_EXAMPLE_KEYS=0`).
+     2. Configures `/boot/firmware/config.txt` with `enable_uart=1`, `dtoverlay=disable-wifi`, and `dtoverlay=disable-bt` (`0.00 W` RF at hardware boot).
+     3. Enables `/etc/systemd/system/diode-node.service` (`EnvironmentFile=-/etc/trailcam/node.env`) so every time `Pico 2` closes `STEMMA` Relay #1, `Pi 5` boots directly into `sender_node.py`, signs the alert as `CAMERA-NORTH-01`, blasts the `3×` optical carousel, asserts `GPIO23 (DONE)`, and halts cleanly.
+     4. Enables read-only `OverlayFS` (`raspi-config nonint do_overlayfs 0`) so sudden power cuts can never corrupt the MicroSD card.
+4. **Autonomous Cold-Boot Verification (`✓ STAGE 5 SUCCESS CHECK`):**
+   * Reboot/power-cycle once with no SSH session attached. Wave your magnetic screwdriver (`[T03]`) over the sensor: Relay #1 clicks ON, `Pi 5` + Media Converter #1 boot in $<7\text{ seconds}$, the Collector Hub dashboard (`http://127.0.0.1:8123`) receives a verified alert signed by `CAMERA-NORTH-01`, `GPIO23 (DONE)` goes HIGH, and Relay #1 clicks OFF (`0.00 W` Pi standby)!
 
 ---
 
