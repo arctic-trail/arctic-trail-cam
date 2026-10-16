@@ -1,6 +1,6 @@
 # Arctic Trail Cam System
 
-> **Open-source, RF-silent Arctic trail & cabin camera with a 1-way optical fiber diode and `<4mW` cold-boot gatekeeper. A private, pro-bono free-market COTS build.**
+> **Open-source, RF-silent Arctic trail & cabin camera with a 1-way optical fiber diode and `<4mW` cold-boot gatekeeper. A private, pro-bono free-market COTS build. 🇫🇮 Finnish engineering.**
 >
 > * **GitHub Topics:** `raspberry-pi-5` · `rp2350` · `pico-2` · `trail-camera` · `data-diode` · `fiber-optics` · `edge-ai` · `hailo-8l` · `ed25519` · `open-hardware` · `arctic-engineering` · `cots`
 > * **Quick Executive Visual Overview (6-Page Plain-English Deck):** [`ARCTIC_TRAIL_CAM_EXECUTIVE_OVERVIEW.pdf`](ARCTIC_TRAIL_CAM_EXECUTIVE_OVERVIEW.pdf)
