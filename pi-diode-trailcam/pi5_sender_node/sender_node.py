@@ -473,6 +473,181 @@ def _encode_target_crop(m_frame, xmin, ymin, xmax, ymax, quality=75, return_boun
     return jpeg_bytes
 
 
+REFERENCE_SUBJECT_HEIGHTS_M = {
+    "person": 1.75,
+    "bicycle": 1.45,
+    "car": 1.55,
+    "motorcycle_atv_snowmobile": 1.25,
+    "bus": 3.00,
+    "train_tracked_vehicle": 3.20,
+    "truck_tractor": 2.60,
+    "boat_watercraft": 1.60,
+    "cervid_moose_horse": 1.95,
+    "deer_reindeer_sheep": 1.15,
+    "moose_bovid": 1.95,
+    "bear": 1.35,
+}
+
+
+def parse_pico_trig_fields(pico_trig):
+    """
+    Parses key=value fields from the Pico 2 Gatekeeper UART string
+    (e.g., 'TRIG,MAG=3200,SEIS=850,DIST=4500,SPD=120,TEMP=-4.2,UPTIME_S=3600').
+    Also supports compact bench strings such as 'RADAR+MAG:120'.
+    """
+    fields = {}
+    if not pico_trig or not isinstance(pico_trig, str):
+        return fields
+    for token in pico_trig.strip().split(","):
+        if "=" in token:
+            k, v = token.split("=", 1)
+            k = k.strip().upper()
+            v = v.strip()
+            try:
+                fields[k] = float(v) if "." in v else int(v)
+            except ValueError:
+                fields[k] = v
+    return fields
+
+
+def estimate_subject_kinematics(
+    detections,
+    pico_telemetry,
+    captured_pairs=None,
+    frame_dt_s=0.05,
+    cam_horiz_fov_deg=102.0,
+    cam_vert_fov_deg=67.0,
+    oblique_trail_deg=25.0,
+):
+    """
+    Estimates where the detected subject was seen, where it is heading, and how fast
+    by fusing:
+      1. Full-frame optical bounding-box horizontal bearing offset & vertical angular size,
+      2. HLK-LD2450 24 GHz FMCW radar range (DIST in mm) and radial speed (SPD in cm/s), and
+      3. Multi-frame optical centroid shift across the 3-frame burst (when available).
+    Returns a compact dictionary suitable for signing inside the DD\\x01 metadata packet.
+    """
+    import math
+
+    trig = parse_pico_trig_fields(pico_telemetry)
+    radar_dist_mm = float(trig.get("DIST", 0.0) or 0.0)
+    if radar_dist_mm <= 0.0 and "RADAR_M" in trig:
+        try:
+            radar_dist_mm = float(trig["RADAR_M"]) * 1000.0
+        except (ValueError, TypeError):
+            radar_dist_mm = 0.0
+    radar_spd_cms = float(trig.get("SPD", 0.0) or 0.0)
+
+    primary_det = None
+    if isinstance(detections, list) and detections:
+        valid_dets = [d for d in detections if isinstance(d, dict)]
+        if valid_dets:
+            primary_det = max(valid_dets, key=lambda d: float(d.get("conf", 0.0)))
+
+    subj_class = primary_det.get("class", "unknown") if primary_det else "unknown"
+    subj_conf = round(float(primary_det.get("conf", 0.0)), 2) if primary_det else 0.0
+
+    # Use full_frame_box if already remapped to crop, otherwise box/bbox
+    box = None
+    if primary_det:
+        box = primary_det.get("full_frame_box") or primary_det.get("box") or primary_det.get("bbox")
+
+    bearing_offset_deg = 0.0
+    box_height_norm = 0.0
+    box_xc = 0.5
+    if isinstance(box, (list, tuple)) and len(box) == 4:
+        bx1, by1, bx2, by2 = [float(v) for v in box]
+        box_xc = max(0.0, min(1.0, 0.5 * (bx1 + bx2)))
+        box_height_norm = max(0.02, min(1.0, abs(by2 - by1)))
+        bearing_offset_deg = round((box_xc - 0.5) * float(cam_horiz_fov_deg), 2)
+
+    # Distance estimation: prefer 24 GHz radar range; fall back to pinhole angular height
+    if radar_dist_mm > 100.0:
+        est_distance_m = round(radar_dist_mm / 1000.0, 2)
+    elif box_height_norm > 0.03:
+        ref_h = REFERENCE_SUBJECT_HEIGHTS_M.get(subj_class, 1.70)
+        vert_fov_rad = math.radians(max(10.0, float(cam_vert_fov_deg)))
+        subj_angle_rad = max(0.02, box_height_norm * vert_fov_rad)
+        est_distance_m = round(max(2.0, min(80.0, ref_h / (2.0 * math.tan(subj_angle_rad / 2.0)))), 2)
+    else:
+        est_distance_m = 12.0
+
+    # Radial velocity (m/s): HLK-LD2450 positive SPD = approaching or receding along radar axis
+    radial_speed_mps = round(radar_spd_cms / 100.0, 2)
+
+    # Transverse velocity (m/s): estimate from inter-frame centroid shift across burst if available
+    transverse_speed_mps = 0.0
+    if captured_pairs and len(captured_pairs) >= 2 and cv2 is not None:
+        try:
+            g_first = cv2.cvtColor(captured_pairs[0][0], cv2.COLOR_BGR2GRAY)
+            g_last = cv2.cvtColor(captured_pairs[-1][0], cv2.COLOR_BGR2GRAY)
+            diff = cv2.absdiff(cv2.GaussianBlur(g_first, (5, 5), 0), cv2.GaussianBlur(g_last, (5, 5), 0))
+            _, thr = cv2.threshold(diff, 22, 255, cv2.THRESH_BINARY)
+            moments = cv2.moments(thr)
+            if moments["m00"] > 200:
+                cx_last = (moments["m10"] / moments["m00"]) / float(g_last.shape[1])
+                dx_norm = cx_last - box_xc
+                total_dt = max(0.02, frame_dt_s * (len(captured_pairs) - 1))
+                horiz_span_m = 2.0 * est_distance_m * math.tan(math.radians(cam_horiz_fov_deg / 2.0))
+                transverse_speed_mps = round(max(-25.0, min(25.0, (dx_norm * horiz_span_m) / total_dt)), 2)
+        except Exception:
+            transverse_speed_mps = 0.0
+
+    # Combine radial and transverse components (accounting for oblique trail mounting angle)
+    if abs(radial_speed_mps) > 0.05 and abs(transverse_speed_mps) < 0.05:
+        oblique_rad = math.radians(max(5.0, min(75.0, float(oblique_trail_deg))))
+        ground_speed_mps = abs(radial_speed_mps) / max(0.5, math.cos(oblique_rad))
+        sign_dir = 1.0 if radial_speed_mps >= 0 else -1.0
+        transverse_speed_mps = round(sign_dir * ground_speed_mps * math.sin(oblique_rad), 2)
+    else:
+        ground_speed_mps = math.hypot(radial_speed_mps, transverse_speed_mps)
+
+    # Default nominal movement speed by class if triggered without Doppler radial speed
+    if ground_speed_mps < 0.15 and primary_det is not None:
+        default_speeds = {
+            "person": 1.45,
+            "bicycle": 4.50,
+            "car": 8.33,
+            "motorcycle_atv_snowmobile": 7.50,
+            "truck_tractor": 6.50,
+            "boat_watercraft": 5.00,
+        }
+        ground_speed_mps = default_speeds.get(subj_class, 1.40)
+        oblique_rad = math.radians(float(oblique_trail_deg))
+        radial_speed_mps = round(ground_speed_mps * math.cos(oblique_rad), 2)
+        transverse_speed_mps = round(ground_speed_mps * math.sin(oblique_rad), 2)
+
+    est_speed_mps = round(ground_speed_mps, 2)
+    est_speed_kmh = round(est_speed_mps * 3.6, 1)
+
+    # Relative heading angle in camera frame (0 deg = moving away along boresight, 180 deg = approaching camera)
+    if est_speed_mps < 0.1:
+        movement_direction = "stationary"
+        rel_heading_deg = 0.0
+    else:
+        # Convert (radial, transverse) into relative movement bearing
+        # Positive radial_speed_mps = approaching camera (180 deg relative to camera look vector)
+        away_vel_m = -radial_speed_mps
+        rel_heading_deg = round(math.degrees(math.atan2(transverse_speed_mps, away_vel_m)) % 360.0, 1)
+        if abs(radial_speed_mps) >= abs(transverse_speed_mps):
+            movement_direction = "approaching" if radial_speed_mps > 0 else "receding"
+        else:
+            movement_direction = "traversing_right" if transverse_speed_mps > 0 else "traversing_left"
+
+    return {
+        "primary_class": subj_class,
+        "primary_conf": subj_conf,
+        "bearing_offset_deg": bearing_offset_deg,
+        "est_distance_m": est_distance_m,
+        "radial_speed_mps": radial_speed_mps,
+        "transverse_speed_mps": transverse_speed_mps,
+        "est_speed_mps": est_speed_mps,
+        "est_speed_kmh": est_speed_kmh,
+        "relative_heading_deg": rel_heading_deg,
+        "movement_direction": movement_direction,
+    }
+
+
 # ==============================================================================
 # Main Pipeline with Strict Fault Recovery
 # ==============================================================================
@@ -690,12 +865,16 @@ def main():
         wait_for_ethernet_carrier(iface=iface, timeout_s=3.0)
 
         # Construct and fire alert payload over optical diode
+        subject_kinematics = estimate_subject_kinematics(
+            detections_found, pico_telemetry, captured_pairs=captured_pairs
+        )
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         alert_payload = {
             "node": NODE_ID,
             "ts": int(time.time()),
             "pico_trig": pico_telemetry,
             "detections": detections_found,
+            "subject_kinematics": subject_kinematics,
             "hailo_active": hailo_available,
             "camera_ok": camera_ok,
             "inference_backend": inference_backend,

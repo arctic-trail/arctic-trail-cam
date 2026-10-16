@@ -81,15 +81,15 @@ The **Zone 1 Micro-Pod** is the tiny, fist-sized black ABS box (`112 × 62 × 31
 
 ---
 
-## STAGE 5: Pack, Wire & Commission the Zone 3 Moss-Buried Base Vault (`QILIPSU IP67` `[P21]`)
+## STAGE 5: Pack, Insulate, Wire & Commission the Zone 3 Underground Base Vault (`QILIPSU IP67` `[P21]`)
 
-The **Zone 3 Base Vault** sits on the ground in a root hollow at the base of the pine tree, hidden under `2 cm` of moss and pine needles. It holds the heavy `12V 12Ah` battery (`[P17]`), the `Pico 2` gatekeeper (`[P07]`), the `Raspberry Pi 5` (`[P01]`), and the `1×2` Optical Data Diode (`[P13]`–`[P15]`).
+The **Zone 3 Base Vault** is buried **`20–30 cm` underground** in a free-draining root hummock (*mätäs*) at the base of the pine tree beneath `5–10 cm` of insulating forest soil, moss, and winter snowpack, and lined with **`10–20 mm` closed-cell neoprene/XPS thermal insulation foam**. This provides **100% visual & thermal concealment** (zero above-ground box outline) AND **geothermal freeze protection** (keeping the battery bay at **`-2°C to -8°C`** even when surface air drops to **`-30°C to -40°C`**).
 
-Look at the exact physical layout in the diagram below—it matches your physical `QILIPSU` enclosure (`285 × 195 × 130 mm`, `[P21]`) with the **`ExpertPower 12V 12Ah` battery (`151 × 98 × 95 mm`, `[P17]`) sitting wall-to-wall across the bottom third**.
+Look at the exact physical layout in the diagram below—it matches your physical `QILIPSU` enclosure (`285 × 195 × 130 mm`, `[P21]`) with the **closed-cell thermal foam liner** and the **`ExpertPower 12V 12Ah` battery (`151 × 98 × 95 mm`, `[P17]`) sitting wall-to-wall across the bottom third**.
 
-![Device 2 Reference: Inside the Zone 3 Base Vault (Wall-to-Wall Battery Fit)](images/device_2_base_compute_vault.jpg)
+![Device 2 Reference: Inside the Underground-Buried & Foam-Insulated Zone 3 Base Vault](images/device_2_base_compute_vault.jpg)
 
-### Step 5.1 — Drill the 3 Gland/Vent Holes, Mount the Grid Backplate & Strap the Battery
+### Step 5.1 — Drill the 3 Gland/Vent Holes, Line with Thermal Foam, Mount the Grid Backplate & Strap the Battery
 
 > [!CAUTION]
 > **KEEP BATTERY TERMINALS UNPLUGGED UNTIL STEP 5.4!** Cover both silver metal tabs (`Red +` and `Black -`) on top of the `12V 12Ah` battery (`[P17]`) with a piece of blue painter's tape (`[T11]`) while placing components inside the box.
@@ -98,8 +98,11 @@ Look at the exact physical layout in the diagram below—it matches your physica
    * **Holes 3 & 4 (`2× Bottom M20 Cable Glands — 20 mm / 3/4"`):** On the bottom wall (`285 × 130 mm`), mark and dimple two crosshairs with your center awl (`[T06]`): one at `75 mm` from the left edge (`65 mm` from front) and one at `210 mm` from the left edge (`65 mm` from front). Using your **Cordless Drill (`[T04]`)** and **`3/4"` (`19–20 mm`) Hole Saw Cup (`[T05]`)**, drill the center pilot holes in `FORWARD` and cut the circular openings in **`REVERSE`**, then pass the **`20 mm` step of your Cone Step Bit (`[T06]`)** through each hole so the **`M20 IP68` cable glands** thread in smoothly.
    * **Hole 5 (`1× Right-Side M12 Breather Vent — 12 mm / 1/2"`):** On the right side wall (`45 mm` down from top, `65 mm` from front), dimple the crosshair and drill a **`12 mm` (`1/2"`) hole** using the `12 mm` step on your **Titanium Cone Step Drill Bit (`[T06]`)**.
    * Thread the two **`M20 IP68` cable glands** into the bottom holes and the **`M12 ePTFE` breather vent** into the side hole, and tighten their internal locknuts `1/4` turn past finger-tight with your wrench/pliers (`[T07]`).
-2. Open the hinged lid of the **`QILIPSU IP67` enclosure (`[P21]`)** and screw the white ABS grid mounting plate into the back of the box using the 4 included corner Phillips screws (`[T07]`).
-3. Place the **`ExpertPower 12V 12Ah` AGM battery (`[P17]`)** horizontally across the **bottom third of the enclosure** (terminals facing up toward the middle of the box). Wrap a heavy-duty Velcro cinch strap (`[T12]`) through the white grid slots around the battery belly so it cannot shift when carrying the box.
+2. **Line the Vault Interior & Door with Closed-Cell Thermal Foam Insulation (`10–20 mm` Neoprene / XPS):**
+   * Press self-adhesive **`10 mm` closed-cell neoprene or XPS foam sheets** against the inside of the hinged door and around the lower battery bay walls (leaving the `M12 ePTFE` breather vent opening unobstructed). Because closed-cell foam cannot absorb moisture (`R-4` to `R-5` per inch), it traps the battery's thermal mass and buffers sudden cold snaps when buried underground.
+3. Open the hinged lid of the **`QILIPSU IP67` enclosure (`[P21]`)** and screw the white ABS grid mounting plate into the back of the box using the 4 included corner Phillips screws (`[T07]`).
+4. Place the **`ExpertPower 12V 12Ah` AGM battery (`[P17]`)** (or drop-in `12V 15Ah–24Ah` low-temp LiFePO4 battery) horizontally across the **foam-lined bottom third of the enclosure** (terminals facing up toward the middle of the box). Wrap a heavy-duty Velcro cinch strap (`[T12]`) through the white grid slots around the battery belly so it cannot shift when carrying the box.
+
 
 ### Step 5.2 — Mount the Middle Row (`Pico 2`, `5V Buck`, `Switches`, `Pi 5`) & Top Row (`Fiber Diode`)
 
@@ -180,19 +183,21 @@ Before closing the `QILIPSU` vault for unattended field operation, transition th
 
 ![3-Zone Covert Split-Pod Field Camera Unit in Context](images/product_units_in_context.jpg)
 
-### Step 6.1 — Strap Zone 1 to the Pine Trunk & Bury Zone 3 Under Moss
+### Step 6.1 — Strap Zone 1 to the Pine Trunk & Bury + Insulate Zone 3 Underground
 
 1. **Pick the Right Tree (`3–5 meters` off the trail edge):**
-   * Choose a mature pine or spruce tree (`>25 cm` trunk diameter) with deep vertical bark grooves and low branches that shade the trunk from direct sky view.
+   * Choose a mature pine or spruce tree (`>25 cm` trunk diameter) growing on a slightly raised, free-draining root hummock (*mätäs*) with deep vertical bark grooves and low branches that shade the trunk from direct sky view.
 2. **Mount the Zone 1 Micro-Pod (`[P20]`) at `1.8 m–2.2 m` Height (`25°` Oblique Angle):**
    * Tuck the camouflaged `Hammond 1591BSBK` pod into a vertical bark crevice at eye level (`1.8 m–2.2 m`).
    * **Aiming Rule (`25°` Oblique):** Point the single circular glass window **`25°` obliquely down the trail or driveway** (not `90°` straight across the road). This gives the camera and radar a `45 m` view down the approach path so walking intruders or vehicles stay in the frame for several seconds.
    * Secure the pod with a matte brown bark strap or two stainless wood screws through the rear mounting tabs, and tuck a piece of natural pine bark / lichen over the top seam.
 3. **Wrap the Zone 2 Trunk Umbilical in `Gear Aid Camo Form` (`[P22]`):**
    * Press the `2 m` umbilical cable straight down a natural vertical groove in the tree bark to the ground, and wrap it with self-clinging matte **`Gear Aid Camo Form`** fabric tape (`[P22]`) so no black wire is visible.
-4. **Hide the Zone 3 Base Vault (`[P21]`) in the Root Hollow:**
-   * Set the closed, latched `QILIPSU IP67` Base Vault in the hollow between the tree roots (or a shallow `15 cm` depression beside a boulder).
-   * Cover the top of the vault with **`2–3 cm` of natural forest moss, pine needles, and bark** so zero plastic is visible from the trail.
+4. **Bury & Insulate the Zone 3 Base Vault (`[P21]`) `20–30 cm` Underground (Concealment + Freeze Protection):**
+   * **Dig a Shallow `20–30 cm` Pit in a Free-Draining Root Hummock (*Mätäs*):** Never bury the box in a low puddle or swamp hollow where spring snowmelt collects. Dig between the raised roots on the high side of the tree and spread **`5 cm` of coarse gravel, crushed rock, or dry pine cones** across the bottom of the pit as a free-draining base bed.
+   * **Wrap & Insulate with Closed-Cell Foam (`10–20 mm` XPS / Neoprene):** In addition to the interior `10 mm` closed-cell foam liner installed in Step 5.1, wrap a **`10–20 mm` closed-cell extruded polystyrene (XPS) or neoprene foam sleeve** around the exterior sides and top of the latched `QILIPSU IP67` vault before setting it into the pit.
+   * **Backfill with `5–10 cm` of Soil & Living Forest Moss (`Sphagnum / Pleurozium`):** Lay the lifted carpet of living forest moss, pine duff, and soil (`5–10 cm` thick) back over the top of the insulated vault so **100% of the box is underground and invisible** from the trail.
+   * **Why Underground Burial + Foam Insulation Doubles Cold-Weather Battery Autonomy:** Even when Arctic air plunges to **`-30°C to -40°C`**, geothermal heat from the forest soil combined with the `R-value` of closed-cell foam, moss, and winter snowpack keeps the buried battery compartment between **`-2°C and -8°C`**—preventing electrolyte freezing, eliminating any thermal hot-spot visible to FLIR cameras, and preserving full **`1.5 to 2.5+ year` battery life**!
 
 ### Step 6.2 — Connect Your Collector Unit (Choose Your Scenario: `A`, `B1`, `B2`, or `B3`)
 

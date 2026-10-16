@@ -310,6 +310,7 @@ def try_reconstruct_image(prefix):
                 "image_bytes": len(full_img),
                 "image_sha256": computed_sha256,
                 "detections": meta.get("detections", []),
+                "subject_kinematics": meta.get("subject_kinematics"),
                 "total_detections": int(meta.get("total_detections", len(meta.get("detections", [])))),
                 "detections_truncated": bool(meta.get("detections_truncated", False)),
                 "pico_trig": meta.get("pico_trig", ""),
