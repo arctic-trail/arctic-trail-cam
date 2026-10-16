@@ -1102,6 +1102,7 @@ def demodulate_vk7mo_lockin_stream(
     fhss_key=None,
     anti_jam_whitening=True,
     cfo_search_range_hz=0.0,
+    civilian_eu_compliant=False,
 ):
     """
     VK7MO / KA7OEI Weak-Signal Non-Coherent Quadrature IQ Lock-In Receiver:
@@ -1434,6 +1435,7 @@ def demodulate_vk7mo_lockin_stream(
         return {
             "status": "OK",
             "mode": "VK7MO_LOCKIN_8FSK",
+            "civilian_eu_compliant": bool(civilian_eu_compliant),
             "passes_combined": len(passes) - len(barrage_jammed_passes_rejected),
             "barrage_jammed_passes_rejected": barrage_jammed_passes_rejected,
             "pulsed_jammer_erasures": pulsed_jammer_erasures,
@@ -1449,6 +1451,7 @@ def demodulate_vk7mo_lockin_stream(
     return {
         "status": status_msg,
         "payload": None,
+        "civilian_eu_compliant": bool(civilian_eu_compliant),
         "barrage_jammed_passes_rejected": barrage_jammed_passes_rejected,
         "pulsed_jammer_erasures": pulsed_jammer_erasures,
         "estimated_cfo_hz": round(estimated_cfo_hz, 1),
@@ -1457,8 +1460,18 @@ def demodulate_vk7mo_lockin_stream(
 
 
 if __name__ == "__main__":
+    import argparse
     import os
     import sys
+
+    parser = argparse.ArgumentParser(description="Sky-Diode-Relay 8-PPM & VK7MO Lock-In Receiver")
+    parser.add_argument(
+        "--civilian-eu-compliant",
+        action="store_true",
+        help="Peacetime License-Exempt Civilian Mode (2400.0-2483.5 MHz ISM, <= 100 mW EIRP).",
+    )
+    args, _ = parser.parse_known_args()
+
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../transmitter")))
     from sky_transmitter import transmit_simulated_burst, encode_vk7mo_lockin_frame
     test_msg = b'{"node":"NODE-NORTH-01","alert":"PERSON","ts":1760000000}'
@@ -1470,10 +1483,18 @@ if __name__ == "__main__":
     assert rx_result["payload"] == test_msg
 
     # Verify VK7MO Weak-Signal Lock-In Receiver at -10 dB wideband SNR + 50 Hz mains hum + DC sunlight
-    vk7mo_tx = encode_vk7mo_lockin_frame(test_msg, symbol_ms=16.0)
+    vk7mo_tx = encode_vk7mo_lockin_frame(
+        test_msg, symbol_ms=16.0, civilian_eu_compliant=args.civilian_eu_compliant
+    )
     noisy_rx, ch_meta = simulate_vk7mo_scatter_channel(vk7mo_tx["waveform"], snr_db=-10.0)
-    vk7mo_res = demodulate_vk7mo_lockin_stream(noisy_rx, symbol_ms=16.0)
-    print(f"VK7MO Lock-In (-10 dB SNR + 50Hz hum): {vk7mo_res['status']} (Repaired erasures: {vk7mo_res.get('erased_symbols_repaired')})")
+    vk7mo_res = demodulate_vk7mo_lockin_stream(
+        noisy_rx, symbol_ms=16.0, civilian_eu_compliant=args.civilian_eu_compliant
+    )
+    print(
+        f"VK7MO Lock-In (-10 dB SNR + 50Hz hum, civilian_eu_compliant={vk7mo_res['civilian_eu_compliant']}): "
+        f"{vk7mo_res['status']} (Repaired erasures: {vk7mo_res.get('erased_symbols_repaired')})"
+    )
     assert vk7mo_res["payload"] == test_msg
     print("-> Self-test verification: 100% MATCH!")
+
 

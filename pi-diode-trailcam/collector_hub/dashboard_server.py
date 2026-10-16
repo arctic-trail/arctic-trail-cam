@@ -211,6 +211,7 @@ def make_command_center_handler(alerts_dir, verbose=False):
                 if os.path.exists(index_path):
                     self.send_response(200)
                     self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
                     self.end_headers()
                     with open(index_path, "rb") as f:
                         self.wfile.write(f.read())

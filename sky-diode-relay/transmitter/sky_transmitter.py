@@ -511,24 +511,136 @@ def _vk7mo_fhss_shift(symbol_idx, fhss_key):
     return digest[0] & 0x07
 
 
+def get_rf_regulatory_profile(
+    civilian_eu_compliant=False,
+    antenna_gain_dbi=14.0,
+    cable_filter_loss_db=1.5,
+):
+    """
+    Returns the hardware & SDR regulatory configuration for Build D (`2.4 GHz` NLOS Relay):
+      - `civilian_eu_compliant=False` (Default — Licensed / Test-Permit / Amateur Radio / Emergency):
+        Uses the external 1.0 W (+30 dBm) Skyworks SE2576L PA (`pa_gate_gp3=1`) and hops across
+        the full 2370–2500 MHz VBF-2435+ passband including lower/upper guard bands (`+42.5 dBm` /
+        `17.8 W` EIRP). Requires a Traficom test license, authority permit, or Amateur Radio
+        permit (13 cm band, 2300–2450 MHz).
+      - `civilian_eu_compliant=True` (`--civilian-eu-compliant` — Peacetime License-Exempt Mode):
+        Zero hardware changes required. Restricts all FHSS carrier hops strictly within
+        `2402.0–2480.0 MHz` (inside the license-exempt `2400.0–2483.5 MHz` ISM band under
+        Traficom Regulation 15 / EU ETSI EN 300 328), disables/bypasses the 1.0 W PA
+        (`pa_gate_gp3=0`), and sets the ADALM-PLUTO SDR conducted TX output to `+7.5 dBm`
+        so total radiated power with the `14 dBi` panel antenna and `1.5 dB` cable/filter
+        insertion loss is capped at exactly `+20.0 dBm` (`100 mW` EIRP).
+    """
+    ant_dbi = float(antenna_gain_dbi)
+    loss_db = float(cable_filter_loss_db)
+    if civilian_eu_compliant:
+        target_eirp_dbm = 20.0  # 100 mW EIRP cap (ETSI EN 300 328 / Traficom Reg 15)
+        conducted_dbm = round(target_eirp_dbm - ant_dbi + loss_db, 2)
+        eirp_dbm = round(conducted_dbm - loss_db + ant_dbi, 2)
+        return {
+            "civilian_eu_compliant": True,
+            "regulatory_mode": "CIVILIAN_EU_ETSI_EN_300_328_ISM_100MW",
+            "license_required": False,
+            "regulatory_notice": (
+                "PEACETIME LICENSE-EXEMPT CIVILIAN MODE (Traficom Reg 15 / ETSI EN 300 328: "
+                "2400.0-2483.5 MHz ISM band, <= +20.0 dBm / 100 mW EIRP)"
+            ),
+            "band_min_mhz": 2402.0,
+            "band_max_mhz": 2480.0,
+            "pa_gate_gp3": 0,
+            "pa_enabled": False,
+            "pluto_tx_power_dbm": conducted_dbm,
+            "tx_conducted_power_dbm": conducted_dbm,
+            "tx_conducted_power_w": round(10.0 ** ((conducted_dbm - 30.0) / 10.0), 5),
+            "antenna_gain_dbi": ant_dbi,
+            "cable_filter_loss_db": loss_db,
+            "eirp_dbm": eirp_dbm,
+            "eirp_mw": round(10.0 ** (eirp_dbm / 10.0), 1),
+        }
+
+    conducted_dbm = 30.0  # 1.0 W Skyworks SE2576L PA
+    eirp_dbm = round(conducted_dbm - loss_db + ant_dbi, 2)
+    return {
+        "civilian_eu_compliant": False,
+        "regulatory_mode": "LICENSED_TEST_OR_EMERGENCY_OUT_OF_BAND",
+        "license_required": True,
+        "regulatory_notice": (
+            "REQUIRES TRAFICOM TEST LICENSE, AUTHORITY PERMIT, OR AMATEUR RADIO PERMIT "
+            "(Default Build D uses 1.0W PA / +42.5 dBm EIRP & 2370-2500 MHz guard-band hopping; "
+            "pass --civilian-eu-compliant for license-exempt 2400-2483.5 MHz <=100 mW EIRP)"
+        ),
+        "band_min_mhz": 2370.0,
+        "band_max_mhz": 2500.0,
+        "pa_gate_gp3": 1,
+        "pa_enabled": True,
+        "pluto_tx_power_dbm": 2.0,
+        "tx_conducted_power_dbm": conducted_dbm,
+        "tx_conducted_power_w": 1.0,
+        "antenna_gain_dbi": ant_dbi,
+        "cable_filter_loss_db": loss_db,
+        "eirp_dbm": eirp_dbm,
+        "eirp_mw": round(10.0 ** (eirp_dbm / 10.0), 1),
+    }
+
+
 def derive_fhss_carrier_schedule(
     fhss_key,
     num_passes=3,
     band_min_mhz=2370.0,
     band_max_mhz=2500.0,
     min_hop_separation_mhz=25.0,
+    civilian_eu_compliant=False,
 ):
     """
-    Cryptographic Wideband Multi-Pass RF Carrier Hopping Schedule (`2370–2500 MHz`):
-    Derives `num_passes` widely separated carrier frequencies across the full 130 MHz
-    hardware passband of the Mini-Circuits `VBF-2435+` filter and `ADALM-PLUTO` SDR.
-    - Pass 0 is placed in the lower guard band (`2372–2396 MHz`, below Wi-Fi Ch 1 and
-      outside standard 2400–2483.5 MHz consumer Wi-Fi / C-UAS drone barrage jammers).
-    - Pass 1 is placed in the upper guard band (`2485–2498 MHz`, above Wi-Fi Ch 13).
-    - Pass 2+ hop pseudo-randomly across the full `band_min_mhz..band_max_mhz` span
-      while enforcing `min_hop_separation_mhz` from prior hops.
+    Cryptographic Wideband Multi-Pass RF Carrier Hopping Schedule:
+      1. Default Licensed / Test-Permit / Emergency Mode (`civilian_eu_compliant=False`):
+         Derives `num_passes` widely separated carrier frequencies across the full 130 MHz
+         hardware passband (`2370–2500 MHz`) of the Mini-Circuits `VBF-2435+` filter:
+         - Pass 0: Lower guard band (`2372–2396 MHz`, below Wi-Fi Ch 1).
+         - Pass 1: Upper guard band (`2485–2498 MHz`, above Wi-Fi Ch 13).
+         - Pass 2+: Full `band_min_mhz..band_max_mhz` span (`>= 25 MHz` separation).
+      2. Peacetime Civilian EU/Traficom Mode (`civilian_eu_compliant=True`):
+         Restricts all hopped carriers strictly inside `2402.0–2480.0 MHz` (within the
+         license-exempt `2400.0–2483.5 MHz` ETSI EN 300 328 / Traficom Regulation 15 ISM band):
+         - Pass 0: Lower ISM sub-band (`2402.0–2420.0 MHz`)
+         - Pass 1: Upper ISM sub-band (`2460.0–2480.0 MHz`)
+         - Pass 2+: Mid ISM sub-band (`2430.0–2450.0 MHz`, enforcing `>= 20 MHz` separation).
     """
     import hashlib
+
+    if civilian_eu_compliant:
+        c_min = 2402.0
+        c_max = 2480.0
+        c_sep = min(float(min_hop_separation_mhz), 20.0)
+        if not fhss_key:
+            default_civ = [2412.0, 2472.0, 2442.0]
+            return [default_civ[i % len(default_civ)] for i in range(max(1, int(num_passes)))]
+
+        key_bytes = fhss_key.encode("utf-8") if isinstance(fhss_key, str) else bytes(fhss_key)
+        hops_mhz = []
+        for p_idx in range(max(1, int(num_passes))):
+            digest = hashlib.sha256(
+                key_bytes + b":CIV_CARRIER:" + struct.pack(">I", p_idx)
+            ).digest()
+            u_val = struct.unpack(">I", digest[:4])[0] / 4294967295.0
+            if p_idx == 0:
+                cand_mhz = round(2402.0 + u_val * 18.0, 3)  # 2402.0 - 2420.0 MHz
+            elif p_idx == 1:
+                cand_mhz = round(2460.0 + u_val * 20.0, 3)  # 2460.0 - 2480.0 MHz
+            elif p_idx == 2:
+                cand_mhz = round(2430.0 + u_val * 20.0, 3)  # 2430.0 - 2450.0 MHz
+            else:
+                cand_mhz = round(c_min + u_val * (c_max - c_min), 3)
+                for attempt in range(1, 16):
+                    if all(abs(cand_mhz - prev) >= c_sep for prev in hops_mhz):
+                        break
+                    d_retry = hashlib.sha256(
+                        key_bytes + b":CIV_RETRY:" + struct.pack(">II", p_idx, attempt)
+                    ).digest()
+                    u_retry = struct.unpack(">I", d_retry[:4])[0] / 4294967295.0
+                    cand_mhz = round(c_min + u_retry * (c_max - c_min), 3)
+            hops_mhz.append(cand_mhz)
+        return hops_mhz
 
     if not fhss_key:
         default_hops = [2382.0, 2491.0, 2437.0]
@@ -567,6 +679,7 @@ def encode_vk7mo_lockin_frame(
     sample_rate_hz=16000,
     enable_fec=True,
     fhss_key=None,
+    civilian_eu_compliant=False,
 ):
     """
     VK7MO / KA7OEI Weak-Signal Coherent 8-FSK Lock-In Transmitter:
@@ -574,7 +687,11 @@ def encode_vk7mo_lockin_frame(
        SECDED frame (`SKYF`, d_min = 4) and maps bytes to 3-bit symbols (0..7).
     2. Optionally applies cryptographic Keyed Frequency-Hopping (`fhss_key`) per
        data symbol to defeat narrowband optical/RF tone jamming and derives a
-       multi-band RF carrier schedule (`carrier_schedule_mhz`) outside ISM Wi-Fi.
+       multi-band RF carrier schedule (`carrier_schedule_mhz`):
+         - Default (`civilian_eu_compliant=False`): 2370–2500 MHz guard-band hopping
+           with 1.0 W PA (+42.5 dBm EIRP; requires Traficom test license / ham permit).
+         - Peacetime Civilian (`civilian_eu_compliant=True`): 2402–2480 MHz in-band ISM
+           hopping with PA bypassed (+20.0 dBm / 100 mW EIRP; license-exempt EU/Traficom).
     3. Prepends the 16-symbol Costas synchronization header (`VK7MO_COSTAS_PREAMBLE`).
     4. Generates both:
        - `tone_schedule_hz`: Hardware PWM frequency sequence for Raspberry Pi Pico 2
@@ -608,12 +725,17 @@ def encode_vk7mo_lockin_frame(
 
     tx_duration_s = (len(all_symbols) * samples_per_sym) / float(sample_rate_hz)
     effective_bps = (len(payload_bytes) * 8.0) / max(1e-9, tx_duration_s)
+    rf_profile = get_rf_regulatory_profile(civilian_eu_compliant=civilian_eu_compliant)
 
     return {
         "frame_len": len(frame),
         "fec_enabled": enable_fec,
         "fhss_enabled": bool(fhss_key),
-        "carrier_schedule_mhz": derive_fhss_carrier_schedule(fhss_key, num_passes=3),
+        "civilian_eu_compliant": bool(civilian_eu_compliant),
+        "rf_regulatory_profile": rf_profile,
+        "carrier_schedule_mhz": derive_fhss_carrier_schedule(
+            fhss_key, num_passes=3, civilian_eu_compliant=civilian_eu_compliant
+        ),
         "data_symbol_count": len(raw_data_symbols),
         "total_symbol_count": len(all_symbols),
         "symbol_ms": float(symbol_ms),
@@ -743,17 +865,49 @@ def calculate_troposcatter_link_budget(
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Sky-Diode-Relay 8-PPM & VK7MO Lock-In Transmitter")
+    parser.add_argument(
+        "--civilian-eu-compliant",
+        action="store_true",
+        help=(
+            "Peacetime License-Exempt Civilian Mode (Traficom Reg 15 / EU ETSI EN 300 328): "
+            "restricts FHSS carrier hopping strictly inside 2400.0-2483.5 MHz (2402-2480 MHz) "
+            "and bypasses the 1.0W PA so total EIRP with the 14 dBi antenna stays <= +20.0 dBm (100 mW)."
+        ),
+    )
+    parser.add_argument(
+        "--fhss-key",
+        default="FINLAND-BORDER-FHSS-KEY-2026",
+        help="Shared secret key for cryptographic FHSS symbol and RF carrier hopping.",
+    )
+    args, _ = parser.parse_known_args()
+
     test_msg = b'{"node":"NODE-NORTH-01","alert":"PERSON","ts":1760000000}'
     result = transmit_simulated_burst(test_msg, enable_fec=True)
     pio_words = pack_pio_timing_words(result["pulse_train_us"])
     energy = compute_sky_relay_energy_budget(len(test_msg), jpeg_crop_bytes_len=2048, temp_c=-20.0)
-    vk7mo_tx = encode_vk7mo_lockin_frame(test_msg, symbol_ms=16.0)
+    vk7mo_tx = encode_vk7mo_lockin_frame(
+        test_msg,
+        symbol_ms=16.0,
+        fhss_key=args.fhss_key,
+        civilian_eu_compliant=args.civilian_eu_compliant,
+    )
+    rf_prof = vk7mo_tx["rf_regulatory_profile"]
     tropo_100km = calculate_troposcatter_link_budget(distance_km=100.0, freq_ghz=2.4, tx_power_w=10.0)
     print("=== SKY RELAY 8-PPM, VK7MO LOCK-IN & 100KM TROPOSCATTER TEST ===")
+    print(f"RF Regulatory Notice: {rf_prof['regulatory_notice']}")
+    print(
+        f"Build D RF Config: Carriers={vk7mo_tx['carrier_schedule_mhz']} MHz | "
+        f"PA Gate GP3={rf_prof['pa_gate_gp3']} | Conducted={rf_prof['tx_conducted_power_dbm']} dBm | "
+        f"EIRP=+{rf_prof['eirp_dbm']} dBm ({rf_prof['eirp_mw']} mW)"
+    )
     print(f"Payload: {test_msg.decode()}")
     print(f"Frame Size: {result['frame_len']} bytes (FEC={result['fec_enabled']})")
     print(f"8-PPM Symbols: {result['symbol_count']} | VK7MO Lock-In Duration: {vk7mo_tx['tx_duration_s']} s")
     print(f"100km Troposcatter (2.4 GHz, 10W, 60cm dish): RX={tropo_100km['rx_power_dbm']} dBm | Margin=+{tropo_100km['median_link_margin_db']} dB")
     print(f"Winter Energy (-20°C w/ 2KB crop + de-icer): {energy['total_energy_wh']:.5f} Wh ({energy['savings_vs_fiber_converter_pct']}% less than Ethernet media converter)")
+
 
 

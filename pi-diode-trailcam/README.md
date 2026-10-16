@@ -3,7 +3,7 @@
 > **Open-source, RF-silent Arctic trail & cabin camera with a 1-way optical fiber diode and `<4mW` cold-boot gatekeeper. A private, pro-bono free-market COTS build.**
 
 > [!WARNING]
-> **PROTOTYPE STATUS (`v0.9-beta`):** This hardware and software package is under active development and physical benchtop testing. While all automated software/simulation suites pass (`4/4`), physical cold-boot latency (`target: 6.4–6.8 s`), battery discharge curves (`target: 120–220+ days`), and outdoor sensor thresholds are currently being tested on physical hardware. Defects are being fixed and measured performance reports will be posted as testing progresses.
+> **PROTOTYPE STATUS (`v0.9-beta`):** This hardware and software package is under active development and physical benchtop testing. While all automated software/simulation suites pass (`5/5`), physical cold-boot latency (`target: 6.4–6.8 s`, `<150 ms` with SPI Instant-Snap buffer), multi-year battery discharge curves (`target: 1.0–2.5+ years` / `365–900+ days` at `10 captures/month` with `LiFePO4`/AGM, or `120–310+ days` at `10 captures/day`), and outdoor sensor thresholds are currently being tested on physical hardware. Defects are being fixed and measured performance reports will be posted as testing progresses.
 
 This package contains the firmware and software for the **Arctic Trail Cam System**: the **Raspberry Pi Pico 2 Gatekeeper**, **Raspberry Pi 5 / Pi 4 Camera Sender Node**, and **Passive Optical Diode Collector Hub & Live Dashboard**.
 
@@ -45,7 +45,9 @@ python3 collector_hub/receiver_hub.py
 python3 collector_hub/dashboard_server.py --port 8123
 ```
 
-Open `http://127.0.0.1:8123` in your browser. As alerts arrive over the one-way fiber link, the dashboard automatically paginates through all new events (`?since_idx=`) and renders the verified JPEG with detection bounding boxes in the top-right viewport.
+Open `http://127.0.0.1:8123` in your browser. As alerts arrive over the one-way fiber link, the dashboard automatically paginates through all new events (`?since_idx=`) and renders the verified JPEG with detection bounding boxes in the top-right viewport:
+
+![Arctic Trail Cam Collector Hub & 3D Evidence Console UI](docs/images/collector_hub_command_center_ui.png)
 
 ### 2. Unattended "Dead-Drop" Collector Vault Mode (No Cabin Nearby)
 When deployed inside a buried waterproof vault $100\text{–}300\text{ m}$ back in the woods with no cabin nearby:

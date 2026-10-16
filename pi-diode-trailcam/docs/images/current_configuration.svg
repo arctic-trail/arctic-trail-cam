@@ -50,5 +50,5 @@
 <text x="340" y="472" class="small">Switched +12V/+5V</text>
 <line x1="760" y1="482" x2="840" y2="482" stroke="#2e7d32" stroke-width="2.2" marker-end="url(#arrow-green)"/>
 <text x="751" y="472" class="small">1310nm One-Way</text>
-<text x="40" y="640" class="sub">Note: Scenario B3 200 m – 20 km All-Weather 2.4 GHz Troposcatter &amp; Canopy-Bounce Relay (sky-diode-relay Build D) bridges over hills with 6-layer anti-jamming.</text>
+<text x="40" y="640" class="sub">Note: Scenario B3 200 m – 20 km All-Weather 2.4 GHz Troposcatter &amp; Canopy-Bounce Relay (`sky-diode-relay` Build D, $1,341.94 COTS BOM) bridges over hills with 6-layer anti-jamming.</text>
 </svg>

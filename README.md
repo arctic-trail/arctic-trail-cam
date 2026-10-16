@@ -10,7 +10,7 @@
 > [!WARNING]
 > **PROTOTYPE DISCLAIMER — ACTIVE DEVELOPMENT & BENCHTOP TESTING IN PROGRESS (`v0.9-beta`)**
 > * **Under Active Development:** This repository is an **experimental proof-of-concept hardware & software engineering prototype** currently undergoing physical benchtop integration and staged validation.
-> * **Validated vs. Target Metrics:** All software/firmware state machines (`Pico 2` Gatekeeper, `Pi 5` sender node, `Ed25519` + `1×2` optical diode UDP pipeline, and `5/5` automated simulation & DRC test suites) are implemented and verified in simulation and Stage 1–2 benchtop bring-up. System performance figures—including the **`6.4–6.8 s` cold-boot latency** and **`120–220+ day` seasonal battery life**—are **engineering design targets and theoretical power/link-budget projections** currently undergoing physical measurement.
+> * **Validated vs. Target Metrics:** All software/firmware state machines (`Pico 2` Gatekeeper, `Pi 5` sender node, `Ed25519` + `1×2` optical diode UDP pipeline, and `5/5` automated simulation & DRC test suites) are implemented and verified in simulation and Stage 1–2 benchtop bring-up. System performance figures—including the **`6.4–6.8 s` cold-boot latency** (`<150 ms` with SPI Instant-Snap buffer) and **`1.0 to 2.5+ year` (`365–900+ day`) battery life** (at a realistic `10 captures/month` with a drop-in `LiFePO4` / AGM battery, or `4–10+ months` on busy `10 captures/day` trails)—are **engineering design targets and theoretical power/link-budget projections** currently undergoing physical measurement.
 > * **Ongoing Defect Tracking & Field Reports:** Hardware, firmware, and mechanical defects discovered during benchtop and outdoor trials are actively being fixed. Measured real-world latency logs, false-alarm soak results, and battery discharge telemetry will be published here as testing progresses.
 
 An off-grid, event-triggered movement-detection and trail camera system (**Arctic Trail Cam System** / `pi-diode-trailcam` & `sky-diode-relay`) designed for remote cabins, hunting grounds, and private forest lands far from internet or cellular coverage. Engineered for year-round operation in harsh Finnish Arctic conditions (`-40°C` to `+50°C`), the system combines milliwatt standby sensing (`Raspberry Pi Pico 2` Gatekeeper), 6-second cold-boot AI vision (`Raspberry Pi 5` + `Sony IMX708 NoIR`), and **physics-enforced one-way optical transmission** (`Ed25519`-signed `1080p` JPEGs sent over `3 mm` moss-buried armored glass fiber or an invisible infrared light beam) with **zero radio emissions (`0.00 W RF`)** at the camera tree.
@@ -31,8 +31,8 @@ Detailed seasonal power models and component-level current draws are maintained 
 
 | Performance Parameter | Verified / Target Specification | Operating Context |
 | :--- | :--- | :--- |
-| **Battery Life (`12V 12Ah` Internal AGM `[P17]`)** | **At `10 Photos/Month` *(Quiet Cabin / Private Land)*:**<br>• **`270 – 310 Days` (`9–10+ Months`)** *(Finnish Winter `-20°C` to `-30°C` under moss)*<br>• **`~385 Days` (`1+ Year`)** *(Spring / Summer / Autumn `+5°C` to `+25°C`)*<br>**At `10 Photos/Day` (`300/Month` *Busy Trail*):**<br>• **`120 – 165 Days`** *(Winter)* / **`~220 Days`** *(Spring/Summer/Autumn)* | At `10 photos/month` (`0.33/day`), capture energy is only `~0.01 Wh/day` (`~0.30 Wh/day` total with `12 mW` Eco Gatekeeper standby). At `10 photos/day`, total draw is `~0.54–0.60 Wh/day`. |
-| **Battery Life (Optional `12V 15Ah` `LiFePO4` / `60Ah` Boat Battery)** | **At `10 Photos/Month`:** **`1.0 – 1.5+ Years`** *(`15Ah LiFePO4`)* / **`3 – 4+ Years`** *(`60Ah`)*<br>**At `10 Photos/Day`:** **`195 – 310 Days`** *(`15Ah LiFePO4`)* / **`1.8 – 2.5+ Years`** *(`60Ah`)* | Uses the exact same `12V` `F2` spade leads inside the moss-buried `QILIPSU` Base Vault (`[P21]`). |
+| **Multi-Year Battery Life (Drop-In `12V 15Ah–24Ah` `LiFePO4` / `60Ah` External)** | **At `10 Photos/Month` *(Realistic Cabin / Border Trail)*:**<br>• **`1.5 – 2.5+ Years` (`565 – 900+ Days`)** *(Drop-In `15Ah–24Ah LiFePO4` inside vault)*<br>• **`3.0 – 4.0+ Years`** *(External `60Ah` Battery — self-discharge limited)*<br>**At `10 Photos/Day` (`300/Month` *High-Traffic Trail*):**<br>• **`10 – 16+ Months`** *(`15Ah–24Ah LiFePO4`)* / **`1.8 – 2.5+ Years`** *(`60Ah`)* | At `10 photos/month` (`0.33/day`), active capture energy is negligible (`~0.01 Wh/day`), so total draw with `4–12 mW` Eco Gatekeeper standby is just `~0.15–0.30 Wh/day`. |
+| **Battery Life (Standard `12V 12Ah` AGM `[P17]`, `$29` / `€27`)** | **At `10 Photos/Month`:** **`1.0 – 1.3+ Years` (`365 – 480 Days`)** *(3-Season)* / **`9 – 12 Months` (`270 – 365 Days`)** *(Finnish Winter under moss)*<br>**At `10 Photos/Day`:** **`120 – 220+ Days`** | Included baseline `12V 12Ah` sealed AGM battery (`[P17]`) mounted inside the moss-buried `QILIPSU` Base Vault (`[P21]`). |
 | **Standby Power (`Domain A` Always-On)** | **`3.8 mW – 12.0 mW`** *(Eco Gatekeeper)* / **`~38 mW`** *(Radar Micro-Sweep)* | `Raspberry Pi 5 [P01]` and `StarTech Fiber Converter [P13]` are **100% physically powered off (`0.00 W`)** by the high-side relay `99.9%` of the time. |
 | **Cold-Boot Trigger-to-Photo Latency** | **`6.4 – 6.8 seconds` total** (`0.025 Wh` per capture) | `Pico 2` switches on `Domain B` $\rightarrow$ `Pi 5` boots stripped Linux kernel in `3.8s` $\rightarrow$ captures `1080p` JPEG $\rightarrow$ runs AI detection $\rightarrow$ signs (`Ed25519`) & blasts `3×` over optical fiber $\rightarrow$ cuts power back to `0.00 W`. |
 | **Operating Temperature & Weatherproofing** | **`-40°C` to `+50°C` Year-Round (`IP67` / `IP68`)** | Moss-buried `QILIPSU` vault buffers battery at `-2°C to -8°C` in deep winter; `3.6W` PTC window heater clears lens frost in `4.0s`. |
@@ -58,7 +58,13 @@ Standalone cutaway plates for **Device 1 (`Zone 1` Camera/Radar Pod)**, **Device
 ![Pin-Accurate Engineering Blueprint & Ordered 10-Line DigiKey BOM](sky-diode-relay/docs/images/sky_relay_20km_troposcatter_blueprint.png)
 
 * **Ordered Production Baseline (`Build D` — `200 m to 20 km` All-Weather `2.4 GHz` Troposcatter, Hydrometeor & Canopy-Bounce Relay, `$1,341.94` parts subtotal, `~35–45 min` zero-solder assembly):** Uses **Analog Devices `ADALM-PLUTO` SDRs**, a **Skyworks `SE2576L-EK1` `1.0 W` (`+30 dBm`) PA**, a **Skyworks `SKY65405-21EK1` (`1.2 dB NF`) LNA**, **Mini-Circuits `VBF-2435+` (`2370–2500 MHz`) coaxial bandpass filters**, and **L-com `HG2414P` (`14 dBi`) outdoor flat-panel antennas** to bounce `VK7MO` coherent lock-in frames (`+55.8 dB` processing gain) off lower-troposphere refractivity gradients, rain/snow clouds, and forest canopies over granite hills (`+14.1 dB` to `+62.3 dB` SNR across all 5 Finnish weather regimes). Protected by a **6-layer electronic anti-jamming stack** that hops into out-of-ISM guard bands (`2380.373 MHz` & `2487.818 MHz`) outside consumer Wi-Fi/drone jammers.
+  * **⚠️ Regulatory Disclaimer & `--civilian-eu-compliant` Software Flag (Zero Hardware Changes):** Operating `Build D` at full `1.0 W` (`+42.5 dBm` / `17.8 W` EIRP) or hopping into out-of-ISM guard bands (`2370–2400 MHz` / `2483.5–2500 MHz`) **requires a Traficom experimental/test radio license, defence/border authority authorization, or Amateur Radio permit (`13 cm` band, `2300–2450 MHz`)**. For **license-exempt peacetime civilian operation** under Traficom Regulation 15 / EU ETSI EN 300 328, pass **`--civilian-eu-compliant`** (`civilian_eu_compliant=True`) to `sky_transmitter.py` and `sky_receiver.py`: this restricts all FHSS carrier hops strictly inside **`2400.0–2483.5 MHz`** (`2402–2480 MHz`) and disables/attenuates the PA (`pa_gate_gp3=0`, `+7.5 dBm` SDR output) so total radiated power is capped at **`<= +20.0 dBm` (`100 mW` EIRP)** while still bridging multi-kilometer NLOS forest paths via `VK7MO`'s `+55.8 dB` coherent processing gain.
 * **Short-Range Optical Beam (`Scenario B2` — `10 m to 100 m` Across a Lake Strait or Road):** Two shore-mounted `1310 nm` fiber lens collimators (**Thorlabs `F220FC-1310`**) convert the fiber signal into a pencil-thin, invisible infrared laser beam across water channels where boats or winter ice prevent laying cable (with optical reference builds `A/B/C` also supported in [`sky-diode-relay`](sky-diode-relay/README.md)).
+
+### 2.3 The Cabin Collector Hub & 3D Evidence Console ([`dashboard_server.py`](pi-diode-trailcam/collector_hub/dashboard_server.py) / [`ui/index.html`](pi-diode-trailcam/collector_hub/ui/index.html))
+![Arctic Trail Cam Collector Hub & 3D Evidence Console UI](pi-diode-trailcam/docs/images/collector_hub_command_center_ui.png)
+
+* **100% Offline Local Browser Console (`http://localhost:8080` / `8123`):** Streams `Ed25519`-verified JPEGs (`DD\x02` chunks), AI bounding boxes (`Hailo-8L` / `YOLOv8n ONNX`), `<150 ms` `Pico 2` SPI First-Frame Instant-Snap PIP insets, and 6-cell `Pico 2` sensor telemetry (`MAG ΔB`, `SEISMIC RMS`, `RADAR DIST/SPD`, `NODE TEMP`, `UPTIME`, `PROFILE`) alongside an interactive 3D topographical terrain map (`Nuuksio`, `Saimaa Archipelago`, `Koli`, `Inari Lapland`, or custom `GeoJSON`/`DEM`) and real-time 4-channel sensor waveforms.
 
 ---
 
@@ -99,18 +105,18 @@ Every document in this repository owns **one distinct responsibility** with zero
 
 ---
 
-## 5. Automated Verification Suites (`94/94` Tests Passing)
+## 5. Automated Verification Suites (`100/100` Tests Passing)
 
 ```bash
 # 1. Run the interactive no-hardware benchtop simulation (generates a signed alert + opens live dashboard):
 python3 pi-diode-trailcam/run_mock_demo.py
 
-# 2. Run all 71 trailcam unit, firmware, hardware DRC, and resilience tests:
+# 2. Run all 76 trailcam unit, firmware, hardware DRC, and contested-border resilience tests:
 python3 pi-diode-trailcam/tests/test_dual_node_simulation.py
 python3 pi-diode-trailcam/tests/test_pico_firmware_simulation.py
 python3 pi-diode-trailcam/tests/test_enhanced_resilience.py
 python3 pi-diode-trailcam/tests/test_carrier_hardware_drc.py
 
-# 3. Run all 23 sky-diode-relay 20km all-weather troposcatter, anti-jamming, FEC, and clock-recovery tests:
+# 3. Run all 24 sky-diode-relay 20km all-weather troposcatter, anti-jamming, civilian-EU mode, and FEC tests:
 python3 -B sky-diode-relay/tests/test_sky_relay_simulation.py
 ```

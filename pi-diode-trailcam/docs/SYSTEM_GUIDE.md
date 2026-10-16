@@ -20,6 +20,8 @@ Start with the [root documentation map](../../README.md). The [engineering speci
 
 ![Device 3 Reference: Cabin Collector Hub & Buried Woods Dead-Drop / 200m–20km Troposcatter NLOS Relay Vault](images/device_3_collector_units.jpg)
 
+![Arctic Trail Cam Collector Hub & 3D Evidence Console UI](images/collector_hub_command_center_ui.png)
+
 ![3-Zone Covert Split-Pod Field Camera Unit in Context](images/product_units_in_context.jpg)
 
 *(Editable vector schematic: [`images/field_product_units_context.svg`](images/field_product_units_context.svg))*

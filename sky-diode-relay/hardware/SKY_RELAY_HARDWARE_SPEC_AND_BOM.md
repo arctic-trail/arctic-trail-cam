@@ -1,10 +1,13 @@
 # Sky-Diode-Relay Hardware Specification, Ordered DigiKey BOM & Zero-Solder Assembly Guide
 
 > [!IMPORTANT]
-> **ORDERED PRODUCTION HARDWARE BASELINE (`Build D` —):**
-> Following 5 engineering iterations and the [Design Evolution & Stability Audit](../docs/DESIGN_EVOLUTION_AND_STABILITY_RECORD.md), **`Build D` (`200 m – 20 km` All-Weather `2.4 GHz` Troposcatter, Hydrometeor & Canopy-Bounce Relay)** is the primary ordered hardware configuration (`10 line items / 20 units`, **`$1,341.94` parts subtotal**, **`$1,577.46` total** with Overnight shipping, tariff, and tax).
+> **ORDERED PRODUCTION HARDWARE BASELINE (`Build D`):**
+> Following 5 engineering iterations and the [Design Evolution & Stability Audit](../docs/DESIGN_EVOLUTION_AND_STABILITY_RECORD.md), **`Build D` (`200 m – 20 km` All-Weather `2.4 GHz` Troposcatter, Hydrometeor & Canopy-Bounce Relay)** is the primary ordered hardware configuration (`10 line items / 20 units`, **`$1,341.94` parts subtotal**).
 > * **Zero Soldering Required:** Every module is a pre-assembled, factory-tested evaluation board (`Analog Devices`, `Skyworks`, `Mini-Circuits`, `L-com`, `TDK-Lambda`, `Raspberry Pi`, `Hammond`) that connects via standard `SMA` coaxial jumpers and screw terminals in **`~35–45 minutes total`**.
 > * **100% Non-Chinese Manufacturer Origin:** Every single component is manufactured by vetted US, UK, Japanese, or Canadian manufacturers.
+> * **⚠️ RF Regulatory Disclaimer (Traficom / EU ETSI EN 300 328) & `--civilian-eu-compliant` Mode:**
+>   * **Licensed / Test-Permit / Amateur Radio / Emergency Mode (Default):** Operating `Build D` with the `1.0 W` (`+30 dBm`) `SE2576L-EK1` PA into the `14 dBi` `HG2414P` panel antenna (`+42.5 dBm` / `17.8 W` EIRP) or hopping into out-of-ISM guard bands (`2370–2400 MHz` & `2483.5–2500 MHz`) **requires a Traficom experimental/test radio license, authority authorization, or Amateur Radio permit (`13 cm` band, `2300–2450 MHz`)**.
+>   * **Peacetime License-Exempt Civilian Mode (`--civilian-eu-compliant`, Zero Hardware Changes):** Passing `--civilian-eu-compliant` (`civilian_eu_compliant=True`) in software restricts all FHSS carrier hops strictly inside **`2400.0–2483.5 MHz`** (`2402–2480 MHz`), keeps `Pico 2 GP3 = LOW` (disabling/bypassing the `1.0 W` PA), and sets `ADALM-PLUTO` TX output to `+7.5 dBm` so total radiated power is capped at **`<= +20.0 dBm` (`100 mW` EIRP)** under **Traficom Regulation 15 / EU ETSI EN 300 328**, while `VK7MO`'s `+55.8 dB` coherent processing gain still bridges multi-kilometer NLOS forest paths.
 > * **Optical Reference Architectures (`Builds A, B, and C`):** Retained in Section 4 below for strictly zero-RF (`0.00 W`) optical line-of-sight or clear-weather cloud-bounce research.
 
 ![200 m – 20 km Troposcatter System Overview in Context](../docs/images/sky_diode_beam_system_in_context.jpg)

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Arctic Trail Cam System // 3D Spatial Command & Telemetry Hub</title>
   <!-- Load local Three.js for 100% offline cabin operation, with CDN fallback -->
   <script src="three.min.js"></script>
@@ -30,7 +30,9 @@
       width: 100%; height: 100%; overflow: hidden;
       background: #050a12; color: var(--text-main);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      touch-action: none; overscroll-behavior: none;
     }
+    #node-list, .alert-list, .modal-body { touch-action: pan-y; }
     #canvas-container {
       position: absolute; inset: 0; z-index: 1; cursor: grab;
     }
@@ -385,6 +387,53 @@
     }
     .preset-title { font-family: var(--font-mono); font-weight: 700; color: var(--accent-cyan); }
     .preset-desc { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+
+    /* Lightbox Thumbnail Grid Gallery */
+    #lightbox-grid {
+      width: min(1180px, 92vw);
+      max-height: 76vh;
+      overflow-y: auto;
+      touch-action: pan-y;
+      display: none;
+      grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
+      gap: 14px;
+      padding: 6px 4px;
+    }
+    .lb-grid-card {
+      background: rgba(8, 16, 28, 0.94);
+      border: 1px solid rgba(0, 229, 255, 0.28);
+      border-radius: 6px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+      display: flex;
+      flex-direction: column;
+    }
+    .lb-grid-card:hover {
+      border-color: var(--accent-cyan);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(0, 229, 255, 0.22);
+    }
+    .lb-grid-card.selected {
+      border: 2px solid var(--accent-green);
+      box-shadow: 0 0 16px rgba(0, 230, 118, 0.35);
+    }
+    .lb-grid-thumb {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #04080e;
+      display: block;
+      border-bottom: 1px solid rgba(0, 229, 255, 0.18);
+    }
+    .lb-grid-meta {
+      padding: 8px 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.4;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
   </style>
 </head>
 <body>
@@ -474,7 +523,7 @@
       <span id="cam-title">CAPTURED EVIDENCE // NODE-NORTH-01</span>
       <span id="cam-time-badge" style="color:var(--accent-green)">940nm NoIR</span>
     </div>
-    <div id="camera-viewport" onclick="openPhotoLightbox()" title="Click to inspect full-resolution photo">
+    <div id="camera-viewport" onclick="handleViewportClick(event)" title="Pinch/Scroll to zoom image • Drag when zoomed to pan • Click to expand full-screen • Double-click to reset zoom">
       <canvas id="cam-canvas" width="480" height="270"></canvas>
       <div class="cam-overlay-top">
         <span id="cam-lens-label">ARDUCAM IMX708 NoIR (1080p + 940nm IR)</span>
@@ -484,7 +533,9 @@
     <div class="cam-toolbar">
       <div style="display:flex;gap:4px;">
         <button class="btn-sm active" id="btn-toggle-boxes" onclick="toggleBoundingBoxes()">☑ AI Boxes</button>
-        <button class="btn-sm" onclick="openPhotoLightbox()">🔍 Expand</button>
+        <button class="btn-sm" onclick="openPhotoLightbox(false)">🔍 Expand</button>
+        <button class="btn-sm" onclick="openPhotoLightbox(true)" title="Open Thumbnail Grid Gallery">⊞ Grid</button>
+        <button class="btn-sm" id="btn-reset-zoom" onclick="resetPhotoZoom()" style="display:none;" title="Reset image zoom to 1x">1:1 Reset</button>
         <button class="btn-sm" onclick="stepAlertSelection(-1)" title="Previous Alert (Left Arrow)">◀</button>
         <button class="btn-sm" onclick="stepAlertSelection(1)" title="Next Alert (Right Arrow)">▶</button>
       </div>
@@ -526,22 +577,25 @@
     <div class="alert-list" id="alert-list"></div>
   </div>
 
-  <!-- Full-Screen High-Resolution Photo Lightbox Modal -->
+  <!-- Full-Screen High-Resolution Photo Lightbox & Grid Gallery Modal -->
   <div id="photo-lightbox" onclick="if(event.target.id==='photo-lightbox') closePhotoLightbox()">
     <div style="width:min(1180px,92vw);display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-family:var(--font-mono);">
       <div>
         <span id="lb-title" style="font-size:15px;font-weight:700;color:var(--accent-cyan);">CAPTURED EVIDENCE</span>
         <span id="lb-subtitle" style="font-size:12px;color:var(--text-dim);margin-left:12px;"></span>
       </div>
-      <div style="display:flex;gap:8px;">
-        <button class="btn-sm" onclick="stepAlertSelection(-1)">◀ Prev</button>
-        <button class="btn-sm" onclick="stepAlertSelection(1)">Next ▶</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-sm" id="btn-lb-grid" onclick="toggleLightboxGrid()" title="Switch between Single Photo and Thumbnail Grid Gallery">⊞ Grid View</button>
+        <button class="btn-sm" id="btn-lb-prev" onclick="stepAlertSelection(-1)">◀ Prev</button>
+        <button class="btn-sm" id="btn-lb-next" onclick="stepAlertSelection(1)">Next ▶</button>
+        <button class="btn-sm" id="btn-lb-reset-zoom" onclick="resetPhotoZoom()" title="Reset zoom to 1:1 (or double-click image)">1:1 Reset Zoom</button>
         <button class="btn-sm" onclick="toggleBoundingBoxes()">☑ Toggle AI Boxes</button>
-        <button class="btn-sm accent" onclick="downloadCurrentAlertImage()">⬇ Download Original JPEG</button>
+        <button class="btn-sm accent" id="btn-lb-download" onclick="downloadCurrentAlertImage()">⬇ Download Original JPEG</button>
         <button class="btn-sm" onclick="closePhotoLightbox()">✕ Close (Esc)</button>
       </div>
     </div>
-    <canvas id="lightbox-canvas" width="1280" height="720"></canvas>
+    <canvas id="lightbox-canvas" width="1280" height="720" style="cursor:grab;"></canvas>
+    <div id="lightbox-grid"></div>
     <div id="lb-footer" style="margin-top:10px;font-family:var(--font-mono);font-size:11.5px;color:var(--text-main);text-align:center;"></div>
   </div>
 
@@ -1035,25 +1089,30 @@
       post.position.set(n.pos.x, n.pos.y + 2.25, n.pos.z);
       scene.add(post);
 
-      // Weatherproof Polycarbonate Enclosure
+      // Weatherproof Polycarbonate Enclosure (oriented toward target sightline)
       const box = new THREE.Mesh(
-        new THREE.BoxGeometry(1.6, 2.2, 1.2),
+        new THREE.BoxGeometry(1.6, 2.2, 1.4),
         new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.4 })
       );
       box.position.set(n.pos.x, n.pos.y + 4.2, n.pos.z);
+      box.lookAt(n.lookAt.x, n.pos.y + 4.2, n.lookAt.z);
       scene.add(box);
 
-      // Camera Viewing Frustum Cones
+      // Camera Viewing Frustum Cones:
+      // Translate ConeGeometry by -range/2 along Y so the pointy apex is at (0,0,0),
+      // then rotateX(-PI/2) so the apex stays at (0,0,0) (the camera box lens) and
+      // the wide base opens outward along +Z toward `n.lookAt`.
       if (n.fovDeg > 0) {
         const coneRadius = Math.tan(THREE.MathUtils.degToRad(n.fovDeg / 2)) * n.range;
         const fovGeo = new THREE.ConeGeometry(coneRadius, n.range, 16, 1, true);
-        fovGeo.rotateX(Math.PI / 2);
+        fovGeo.translate(0, -n.range / 2, 0);
+        fovGeo.rotateX(-Math.PI / 2);
         const fovMat = new THREE.MeshBasicMaterial({
           color: 0x00e676, wireframe: true, transparent: true, opacity: 0.28
         });
         const fovMesh = new THREE.Mesh(fovGeo, fovMat);
         fovMesh.position.set(n.pos.x, n.pos.y + 4.2, n.pos.z);
-        fovMesh.lookAt(n.lookAt.x, n.pos.y + 2.0, n.lookAt.z);
+        fovMesh.lookAt(n.lookAt.x, getTerrainHeight(n.lookAt.x, n.lookAt.z) + 1.5, n.lookAt.z);
         layerGroups.fov.add(fovMesh);
       }
 
@@ -1066,16 +1125,22 @@
       sRing.position.set(n.pos.x, n.pos.y + 0.15, n.pos.z);
       layerGroups.seismic.add(sRing);
 
-      // Optical Transmission Links
+      // Optical Transmission Links (terrain-following from node post base to Cabin Collector)
       if (n.linkType === 'fiber') {
-        const pts = [
-          new THREE.Vector3(n.pos.x, n.pos.y + 0.2, n.pos.z),
-          new THREE.Vector3((n.pos.x + CABIN_POS.x) * 0.5, getTerrainHeight((n.pos.x + CABIN_POS.x) * 0.5, (n.pos.z + CABIN_POS.z) * 0.5) + 0.3, (n.pos.z + CABIN_POS.z) * 0.5),
-          new THREE.Vector3(CABIN_POS.x - 4, getTerrainHeight(CABIN_POS.x - 4, CABIN_POS.z) + 0.2, CABIN_POS.z)
-        ];
+        const pts = [];
+        const endX = CABIN_POS.x - 4;
+        const endZ = CABIN_POS.z;
+        const numSamples = 16;
+        for (let s = 0; s <= numSamples; s++) {
+          const frac = s / numSamples;
+          const lx = n.pos.x + (endX - n.pos.x) * frac;
+          const lz = n.pos.z + (endZ - n.pos.z) * frac;
+          const ly = getTerrainHeight(lx, lz) + 0.28;
+          pts.push(new THREE.Vector3(lx, ly, lz));
+        }
         const curve = new THREE.CatmullRomCurve3(pts);
         const tube = new THREE.Mesh(
-          new THREE.TubeGeometry(curve, 32, 0.22, 6, false),
+          new THREE.TubeGeometry(curve, 48, 0.22, 6, false),
           new THREE.MeshBasicMaterial({ color: 0x00e5ff })
         );
         layerGroups.links.add(tube);
@@ -1185,10 +1250,20 @@
       labelsContainer.appendChild(el);
 
       const spdCms = Math.round(speedKmh / 0.036);
+      const matchingVerified = recordedAlerts.find(a => a.imageUrl && a.imageObj && (
+        (type === 'vehicle' && (a.type === 'truck' || a.type === 'car' || a.type === 'vehicle')) ||
+        (type === 'person' && a.type === 'person') ||
+        (type === 'moose' && (a.type === 'moose' || a.type === 'deer' || a.category === 'wildlife')) ||
+        (type === 'snowmobile' && a.type === 'snowmobile')
+      ));
       const tObj = {
         id, type, curve, t: 0.35, speedKmh, conf, magDelta, seisRms,
         pico_trig: `TRIG,MAG=${1100 + magDelta},MBASE=1100,SEIS=${150 + seisRms},SBASE=150,DIST=6800,SPD=${spdCms},TEMP=3.8,UPTIME_S=7240,PROFILE=FULL_TRIPLE`,
-        assignedNode, mesh: tMesh, trailPoints, trailLine, labelEl: el, triggered: true
+        assignedNode, mesh: tMesh, trailPoints, trailLine, labelEl: el, triggered: true,
+        imageUrl: matchingVerified ? matchingVerified.imageUrl : undefined,
+        imageObj: matchingVerified ? matchingVerified.imageObj : undefined,
+        detections: matchingVerified ? matchingVerified.detections : undefined,
+        hash: matchingVerified ? matchingVerified.hash : undefined
       };
       el.onclick = () => focusOnObject(tMesh.position, `${id}: ${type.toUpperCase()}`);
       movingTargets.push(tObj);
@@ -1342,6 +1417,8 @@
       });
     }
 
+    let lightboxGridMode = false;
+
     function toggleBoundingBoxes() {
       showBoundingBoxes = !showBoundingBoxes;
       const btn = document.getElementById('btn-toggle-boxes');
@@ -1351,15 +1428,56 @@
       }
       drawSimulatedCameraView();
       if (document.getElementById('photo-lightbox').style.display === 'flex') {
+        if (lightboxGridMode) renderLightboxGrid();
+        else renderLightboxCanvas();
+      }
+    }
+
+    function setLightboxGridMode(isGrid) {
+      lightboxGridMode = !!isGrid;
+      const gridEl = document.getElementById('lightbox-grid');
+      const gridBtn = document.getElementById('btn-lb-grid');
+      const prevBtn = document.getElementById('btn-lb-prev');
+      const nextBtn = document.getElementById('btn-lb-next');
+      const rstBtn = document.getElementById('btn-lb-reset-zoom');
+      const dlBtn = document.getElementById('btn-lb-download');
+
+      if (lightboxGridMode) {
+        if (lbCanvas) lbCanvas.style.display = 'none';
+        if (gridEl) gridEl.style.display = 'grid';
+        if (gridBtn) {
+          gridBtn.textContent = '🖼️ Single Photo';
+          gridBtn.classList.add('active');
+        }
+        if (prevBtn) prevBtn.style.display = 'none';
+        if (nextBtn) nextBtn.style.display = 'none';
+        if (rstBtn) rstBtn.style.display = 'none';
+        if (dlBtn) dlBtn.style.display = 'none';
+        renderLightboxGrid();
+      } else {
+        if (lbCanvas) lbCanvas.style.display = 'block';
+        if (gridEl) gridEl.style.display = 'none';
+        if (gridBtn) {
+          gridBtn.textContent = '⊞ Grid View';
+          gridBtn.classList.remove('active');
+        }
+        if (prevBtn) prevBtn.style.display = 'inline-block';
+        if (nextBtn) nextBtn.style.display = 'inline-block';
+        if (rstBtn) rstBtn.style.display = 'inline-block';
+        if (dlBtn) dlBtn.style.display = 'inline-block';
         renderLightboxCanvas();
       }
     }
 
-    function openPhotoLightbox() {
+    function toggleLightboxGrid() {
+      setLightboxGridMode(!lightboxGridMode);
+    }
+
+    function openPhotoLightbox(startInGrid = false) {
       const lb = document.getElementById('photo-lightbox');
       if (!lb) return;
       lb.style.display = 'flex';
-      renderLightboxCanvas();
+      setLightboxGridMode(!!startInGrid);
     }
 
     function closePhotoLightbox() {
@@ -1367,7 +1485,62 @@
       if (lb) lb.style.display = 'none';
     }
 
+    function renderLightboxGrid() {
+      const gridEl = document.getElementById('lightbox-grid');
+      if (!gridEl) return;
+      gridEl.innerHTML = '';
+
+      const filtered = recordedAlerts.filter(a => activeAlertFilter === 'all' || a.category === activeAlertFilter);
+      document.getElementById('lb-title').textContent =
+        `CAPTURED EVIDENCE GALLERY // ${filtered.length} ${activeAlertFilter === 'all' ? 'TOTAL' : activeAlertFilter.toUpperCase()} CAPTURES`;
+      document.getElementById('lb-subtitle').textContent =
+        'Click any thumbnail below to open full-resolution inspection & zoom';
+      document.getElementById('lb-footer').textContent =
+        `Showing ${filtered.length} verified capture(s) • Click a card to inspect individual image`;
+
+      filtered.forEach(tObj => {
+        const node = tObj.assignedNode || NODES.find(n => n.id === tObj.nodeId) || NODES[0];
+        const parsed = parsePicoTrig(tObj.pico_trig, tObj);
+        const card = document.createElement('div');
+        card.className = 'lb-grid-card' + (tObj === currentCamTarget ? ' selected' : '');
+
+        const thumbCvs = document.createElement('canvas');
+        thumbCvs.width = 320;
+        thumbCvs.height = 180;
+        thumbCvs.className = 'lb-grid-thumb';
+        const thumbCtx = thumbCvs.getContext('2d');
+        drawTargetToCanvas(thumbCvs, thumbCtx, tObj, true);
+
+        const badgeIcon = tObj.category === 'person' ? '🧑' : (tObj.category === 'wildlife' ? '🦌' : (tObj.category === 'boat' ? '🚤' : '🚗'));
+        const meta = document.createElement('div');
+        meta.className = 'lb-grid-meta';
+        meta.innerHTML = `
+          <div style="display:flex;justify-content:space-between;color:var(--accent-amber);font-weight:700;">
+            <span>${badgeIcon} [${tObj.alertTimeStr || 'Live'}] ${(tObj.type || 'TARGET').toUpperCase()} (${Math.round((tObj.conf || 0.9) * 100)}%)</span>
+            <span>${parsed.speedKmh.toFixed(1)} km/h</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;color:var(--text-dim);font-size:10px;">
+            <span>${node.id} &bull; ΔB=${Math.round(parsed.magDelta)}nT</span>
+            <span style="color:${tObj.imageUrl ? 'var(--accent-green)' : 'var(--text-dim)'}">${tObj.imageUrl ? '✓ JPEG Verified' : 'Sim Preview'}</span>
+          </div>
+        `;
+
+        card.appendChild(thumbCvs);
+        card.appendChild(meta);
+        card.onclick = () => {
+          selectAlertRecord(tObj);
+          selectNode(node);
+          setLightboxGridMode(false);
+        };
+        gridEl.appendChild(card);
+      });
+    }
+
     function renderLightboxCanvas() {
+      if (lightboxGridMode) {
+        renderLightboxGrid();
+        return;
+      }
       if (!currentCamTarget) return;
       const node = currentCamTarget.assignedNode || NODES[0];
       const parsed = parsePicoTrig(currentCamTarget.pico_trig, currentCamTarget);
@@ -1433,6 +1606,9 @@
         if (el) el.classList.toggle('active', c === cat);
       });
       renderAlertList();
+      if (document.getElementById('photo-lightbox').style.display === 'flex' && lightboxGridMode) {
+        renderLightboxGrid();
+      }
     }
 
     function stepAlertSelection(dir) {
@@ -1496,8 +1672,80 @@
       renderNodeLists();
     }
 
+    // Cursor-centered photo zoom & pan state (shared between right-panel preview & full-screen lightbox)
+    const imageZoomState = {
+      scale: 1.0,
+      panX: 0.0, // normalized [-1..0] offset in canvas-width units
+      panY: 0.0,
+      isDragging: false,
+      didDrag: false,
+      startX: 0,
+      startY: 0
+    };
+
+    function resetPhotoZoom() {
+      imageZoomState.scale = 1.0;
+      imageZoomState.panX = 0.0;
+      imageZoomState.panY = 0.0;
+      const rstBtn = document.getElementById('btn-reset-zoom');
+      if (rstBtn) rstBtn.style.display = 'none';
+      drawSimulatedCameraView();
+      if (document.getElementById('photo-lightbox').style.display === 'flex') {
+        renderLightboxCanvas();
+      }
+    }
+
+    function applyPhotoZoomAtPoint(canvasEl, zoomFactor, clientX, clientY) {
+      const rect = canvasEl.getBoundingClientRect();
+      const relX = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
+      const relY = Math.max(0, Math.min(1, (clientY - rect.top) / Math.max(1, rect.height)));
+
+      const oldScale = imageZoomState.scale;
+      const newScale = Math.max(1.0, Math.min(8.0, oldScale * zoomFactor));
+      if (newScale === 1.0) {
+        resetPhotoZoom();
+        return;
+      }
+
+      // Keep cursor point stationary in normalized coordinates:
+      // imgX = (relX - panX) / oldScale => newPanX = relX - imgX * newScale
+      const imgX = (relX - imageZoomState.panX) / oldScale;
+      const imgY = (relY - imageZoomState.panY) / oldScale;
+      imageZoomState.scale = newScale;
+      imageZoomState.panX = Math.min(0, Math.max(1 - newScale, relX - imgX * newScale));
+      imageZoomState.panY = Math.min(0, Math.max(1 - newScale, relY - imgY * newScale));
+
+      const rstBtn = document.getElementById('btn-reset-zoom');
+      if (rstBtn) {
+        rstBtn.style.display = newScale > 1.01 ? 'inline-block' : 'none';
+        rstBtn.textContent = `1:1 (${newScale.toFixed(1)}x)`;
+      }
+      drawSimulatedCameraView();
+      if (document.getElementById('photo-lightbox').style.display === 'flex') {
+        renderLightboxCanvas();
+      }
+    }
+
+    function handleViewportClick(e) {
+      if (imageZoomState.didDrag) {
+        imageZoomState.didDrag = false;
+        return;
+      }
+      if (imageZoomState.scale <= 1.02) {
+        openPhotoLightbox(false);
+      }
+    }
+
     function selectAlertRecord(tObj) {
+      const switchedTarget = (currentCamTarget !== tObj);
       currentCamTarget = tObj;
+      if (switchedTarget) {
+        imageZoomState.scale = 1.0;
+        imageZoomState.panX = 0.0;
+        imageZoomState.panY = 0.0;
+        const rstBtn = document.getElementById('btn-reset-zoom');
+        if (rstBtn) rstBtn.style.display = 'none';
+      }
       const node = tObj.assignedNode || NODES.find(n => n.id === tObj.nodeId) || NODES[0];
       const parsed = parsePicoTrig(tObj.pico_trig, tObj);
 
@@ -1572,13 +1820,21 @@
       });
     }
 
-    function drawTargetToCanvas(canvasEl, ctx, targetObj) {
+    function drawTargetToCanvas(canvasEl, ctx, targetObj, ignoreZoom = false) {
       const w = canvasEl.width, h = canvasEl.height;
+      const zScale = ignoreZoom ? 1.0 : (imageZoomState.scale || 1.0);
+      const zPanX = ignoreZoom ? 0.0 : ((imageZoomState.panX || 0.0) * w);
+      const zPanY = ignoreZoom ? 0.0 : ((imageZoomState.panY || 0.0) * h);
+
+      ctx.fillStyle = '#04080e';
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.save();
+      ctx.translate(zPanX, zPanY);
+      ctx.scale(zScale, zScale);
 
       // Render real verified JPEG from the optical diode when available
       if (targetObj && targetObj.imageObj && targetObj.imageObj.complete && targetObj.imageObj.naturalWidth > 0) {
-        ctx.fillStyle = '#04080e';
-        ctx.fillRect(0, 0, w, h);
         ctx.drawImage(targetObj.imageObj, 0, 0, w, h);
         if (showBoundingBoxes) {
           const dets = targetObj.detections || [];
@@ -1594,75 +1850,112 @@
               }
               const bx = xmin * w, by = ymin * h, bw = (xmax - xmin) * w, bh = (ymax - ymin) * h;
               ctx.strokeStyle = '#00e676';
-              ctx.lineWidth = Math.max(2, Math.round(w / 240));
+              ctx.lineWidth = Math.max(1.5, Math.round(w / 240)) / zScale;
               ctx.strokeRect(bx, by, bw, bh);
               const cname = det.class || det.class_name || 'TARGET';
               const cconf = det.conf !== undefined ? det.conf : (det.confidence !== undefined ? det.confidence : 0.9);
               const lbl = `${cname.toUpperCase()} ${ Number(cconf).toFixed(2) }`;
-              const fontPx = Math.max(11, Math.round(w / 42));
+              const fontPx = Math.max(11, Math.round(w / 42)) / zScale;
               ctx.font = `bold ${fontPx}px monospace`;
-              const tw = ctx.measureText(lbl).width + 10;
-              const ly = Math.max(fontPx + 6, by);
+              const tw = ctx.measureText(lbl).width + (10 / zScale);
+              const ly = Math.max(fontPx + (6 / zScale), by);
               ctx.fillStyle = '#00e676';
-              ctx.fillRect(bx, ly - fontPx - 6, tw, fontPx + 6);
+              ctx.fillRect(bx, ly - fontPx - (6 / zScale), tw, fontPx + (6 / zScale));
               ctx.fillStyle = '#021008';
-              ctx.fillText(lbl, bx + 5, ly - 4);
+              ctx.fillText(lbl, bx + (5 / zScale), ly - (4 / zScale));
             }
           });
         }
-        return;
-      }
-
-      // Clean synthetic 940nm night-vision preview when no real JPEG has arrived yet
-      ctx.fillStyle = '#061512';
-      ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = '#0d2922';
-      ctx.fillRect(0, h * 0.45, w, h * 0.55);
-
-      ctx.fillStyle = '#081d18';
-      for (let i = 0; i < 9; i++) {
-        const tx = (i + 0.5) * (w / 9);
-        ctx.beginPath();
-        ctx.moveTo(tx, h * 0.12);
-        ctx.lineTo(tx - (w * 0.045), h * 0.55);
-        ctx.lineTo(tx + (w * 0.045), h * 0.55);
-        ctx.fill();
-      }
-
-      const targetType = (targetObj && targetObj.type) || 'vehicle';
-      const targetConf = (targetObj && targetObj.conf) || 0.96;
-      const parsed = parsePicoTrig(targetObj ? targetObj.pico_trig : '', targetObj || {});
-      const pulse = Math.sin(Date.now() * 0.004) * (w * 0.015);
-      const bx = w * 0.32 + pulse, by = h * 0.36, bw = w * 0.34, bh = h * 0.38;
-
-      ctx.fillStyle = 'rgba(180, 255, 220, 0.78)';
-      if (targetType.includes('vehicle') || targetType.includes('car') || targetType.includes('snowmobile') || targetType.includes('truck')) {
-        ctx.fillRect(bx + bw * 0.1, by + bh * 0.32, bw * 0.8, bh * 0.55);
-        ctx.fillRect(bx + bw * 0.24, by + bh * 0.14, bw * 0.52, bh * 0.22);
-      } else if (targetType.includes('person')) {
-        ctx.fillRect(bx + bw * 0.4, by + bh * 0.24, bw * 0.2, bh * 0.65);
-        ctx.beginPath(); ctx.arc(bx + bw * 0.5, by + bh * 0.14, bh * 0.1, 0, Math.PI * 2); ctx.fill();
       } else {
-        ctx.fillRect(bx + bw * 0.2, by + bh * 0.32, bw * 0.58, bh * 0.48);
-        ctx.fillRect(bx + bw * 0.65, by + bh * 0.14, bw * 0.18, bh * 0.3);
+        // Clean synthetic 940nm night-vision preview when no real JPEG has arrived yet
+        ctx.fillStyle = '#061512';
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#0d2922';
+        ctx.fillRect(0, h * 0.45, w, h * 0.55);
+
+        ctx.fillStyle = '#081d18';
+        for (let i = 0; i < 9; i++) {
+          const tx = (i + 0.5) * (w / 9);
+          ctx.beginPath();
+          ctx.moveTo(tx, h * 0.12);
+          ctx.lineTo(tx - (w * 0.045), h * 0.55);
+          ctx.lineTo(tx + (w * 0.045), h * 0.55);
+          ctx.fill();
+        }
+
+        const targetType = (targetObj && targetObj.type) || 'vehicle';
+        const targetConf = (targetObj && targetObj.conf) || 0.96;
+        const parsed = parsePicoTrig(targetObj ? targetObj.pico_trig : '', targetObj || {});
+        const pulse = Math.sin(Date.now() * 0.004) * (w * 0.015);
+        const bx = w * 0.32 + pulse, by = h * 0.36, bw = w * 0.34, bh = h * 0.38;
+
+        ctx.fillStyle = 'rgba(180, 255, 220, 0.78)';
+        if (targetType.includes('vehicle') || targetType.includes('car') || targetType.includes('snowmobile') || targetType.includes('truck')) {
+          ctx.fillRect(bx + bw * 0.1, by + bh * 0.32, bw * 0.8, bh * 0.55);
+          ctx.fillRect(bx + bw * 0.24, by + bh * 0.14, bw * 0.52, bh * 0.22);
+        } else if (targetType.includes('person')) {
+          ctx.fillRect(bx + bw * 0.4, by + bh * 0.24, bw * 0.2, bh * 0.65);
+          ctx.beginPath(); ctx.arc(bx + bw * 0.5, by + bh * 0.14, bh * 0.1, 0, Math.PI * 2); ctx.fill();
+        } else {
+          ctx.fillRect(bx + bw * 0.2, by + bh * 0.32, bw * 0.58, bh * 0.48);
+          ctx.fillRect(bx + bw * 0.65, by + bh * 0.14, bw * 0.18, bh * 0.3);
+        }
+
+        if (showBoundingBoxes) {
+          ctx.strokeStyle = '#00e676';
+          ctx.lineWidth = 2 / zScale;
+          ctx.strokeRect(bx, by, bw, bh);
+          ctx.fillStyle = '#00e676';
+          ctx.font = `bold ${11 / zScale}px monospace`;
+          const labelTxt = `${targetType.toUpperCase()} ${Number(targetConf).toFixed(2)} | ${parsed.speedKmh.toFixed(1)}km/h`;
+          ctx.fillRect(bx, by - (17 / zScale), ctx.measureText(labelTxt).width + (10 / zScale), 17 / zScale);
+          ctx.fillStyle = '#021008';
+          ctx.fillText(labelTxt, bx + (5 / zScale), by - (4 / zScale));
+        }
       }
 
-      if (showBoundingBoxes) {
-        ctx.strokeStyle = '#00e676';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(bx, by, bw, bh);
-        ctx.fillStyle = '#00e676';
-        ctx.font = 'bold 11px monospace';
-        const labelTxt = `${targetType.toUpperCase()} ${Number(targetConf).toFixed(2)} | ${parsed.speedKmh.toFixed(1)}km/h`;
-        ctx.fillRect(bx, by - 17, ctx.measureText(labelTxt).width + 10, 17);
-        ctx.fillStyle = '#021008';
-        ctx.fillText(labelTxt, bx + 5, by - 4);
+      ctx.restore();
+
+      // Overlay zoom badge when zoomed in (> 1.01x)
+      if (zScale > 1.01) {
+        const zText = `🔍 ${zScale.toFixed(1)}x ZOOM (Drag: Pan • Dbl-Click: 1x)`;
+        const fSize = Math.max(10, Math.round(w / 46));
+        ctx.font = `bold ${fSize}px monospace`;
+        const pad = 6;
+        const bw = ctx.measureText(zText).width + pad * 2;
+        const bh = fSize + pad * 1.5;
+        ctx.fillStyle = 'rgba(5, 14, 24, 0.85)';
+        ctx.fillRect(8, h - bh - 8, bw, bh);
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(8, h - bh - 8, bw, bh);
+        ctx.fillStyle = '#00e5ff';
+        ctx.fillText(zText, 8 + pad, h - 8 - pad * 0.55);
       }
     }
 
     function drawSimulatedCameraView() {
       drawTargetToCanvas(camCanvas, camCtx, currentCamTarget);
     }
+
+    // Bind double-click and drag-to-pan on #cam-canvas and #lightbox-canvas
+    [camCanvas, lbCanvas].forEach(cvs => {
+      if (!cvs) return;
+      cvs.addEventListener('dblclick', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        resetPhotoZoom();
+      });
+      cvs.addEventListener('mousedown', e => {
+        if (imageZoomState.scale <= 1.01) return;
+        e.stopPropagation();
+        imageZoomState.isDragging = true;
+        imageZoomState.didDrag = false;
+        imageZoomState.startX = e.clientX;
+        imageZoomState.startY = e.clientY;
+        cvs.style.cursor = 'grabbing';
+      });
+    });
 
     // =========================================================================
     // 7. BUTTER-SMOOTH ORBIT, PAN & CAMERA PRESETS
@@ -1671,20 +1964,45 @@
 
     window.addEventListener('mousedown', e => {
       // Don't intercept clicks on UI panels or modals
-      if (e.target.closest('#left-panel, #right-panel, #top-bar, #bottom-bar, #gis-modal, .label-3d')) return;
+      if (e.target.closest('#left-panel, #right-panel, #top-bar, #bottom-bar, #gis-modal, #photo-lightbox, .label-3d')) return;
       isDragging = true;
       isRightDrag = (e.button === 2 || e.shiftKey);
       prevMouse = { x: e.clientX, y: e.clientY };
     });
 
-    window.addEventListener('mouseup', () => { isDragging = false; });
+    window.addEventListener('mouseup', () => {
+      isDragging = false;
+      if (imageZoomState.isDragging) {
+        imageZoomState.isDragging = false;
+        if (camCanvas) camCanvas.style.cursor = imageZoomState.scale > 1.01 ? 'grab' : '';
+        if (lbCanvas) lbCanvas.style.cursor = 'grab';
+      }
+    });
     window.addEventListener('contextmenu', e => {
-      if (!e.target.closest('#left-panel, #right-panel, #top-bar, #bottom-bar, #gis-modal')) {
+      if (!e.target.closest('#left-panel, #right-panel, #top-bar, #bottom-bar, #gis-modal, #photo-lightbox')) {
         e.preventDefault();
       }
     });
 
     window.addEventListener('mousemove', e => {
+      // Handle panning inside zoomed photo canvas (#cam-canvas or #lightbox-canvas)
+      if (imageZoomState.isDragging && imageZoomState.scale > 1.01) {
+        const activeCvs = (document.getElementById('photo-lightbox').style.display === 'flex') ? lbCanvas : camCanvas;
+        const rect = activeCvs.getBoundingClientRect();
+        const dx = e.clientX - imageZoomState.startX;
+        const dy = e.clientY - imageZoomState.startY;
+        if (Math.hypot(dx, dy) > 3) imageZoomState.didDrag = true;
+        imageZoomState.startX = e.clientX;
+        imageZoomState.startY = e.clientY;
+        imageZoomState.panX = Math.min(0, Math.max(1 - imageZoomState.scale, imageZoomState.panX + dx / Math.max(1, rect.width)));
+        imageZoomState.panY = Math.min(0, Math.max(1 - imageZoomState.scale, imageZoomState.panY + dy / Math.max(1, rect.height)));
+        drawSimulatedCameraView();
+        if (document.getElementById('photo-lightbox').style.display === 'flex') {
+          renderLightboxCanvas();
+        }
+        return;
+      }
+
       // Update cursor coordinate readout
       const raycaster = new THREE.Raycaster();
       const mouse = new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
@@ -1733,15 +2051,64 @@
       if (btn) btn.textContent = panInverted ? '🖱️ Pan: Inverted' : '🖱️ Pan: Natural';
     }
 
+    // Prevent Safari/WebKit native trackpad gesture zoom on the host HTML page
+    let lastGestureScale = 1.0;
+    window.addEventListener('gesturestart', e => {
+      e.preventDefault();
+      lastGestureScale = 1.0;
+    }, { passive: false });
+    window.addEventListener('gesturechange', e => {
+      e.preventDefault();
+      const ratio = (e.scale || 1.0) / Math.max(0.01, lastGestureScale);
+      lastGestureScale = e.scale || 1.0;
+      const photoEl = e.target.closest('#camera-viewport, #lightbox-canvas');
+      if (photoEl) {
+        const cvs = photoEl.id === 'lightbox-canvas' ? lbCanvas : camCanvas;
+        applyPhotoZoomAtPoint(cvs, ratio, e.clientX || window.innerWidth / 2, e.clientY || window.innerHeight / 2);
+      } else if (!e.target.closest('#left-panel, #right-panel, #gis-modal')) {
+        targetSpherical.radius = Math.max(35, Math.min(500, targetSpherical.radius / ratio));
+      }
+    }, { passive: false });
+    window.addEventListener('gestureend', e => {
+      e.preventDefault();
+    }, { passive: false });
+
+    // Prevent Ctrl/Cmd + +/-/0 from zooming the host HTML page
+    window.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    // Global wheel & trackpad pinch handler ({ passive: false } so browser page zoom is ALWAYS blocked)
     window.addEventListener('wheel', e => {
-      if (e.target.closest('#left-panel, #right-panel, #gis-modal')) return;
+      // 1. ALWAYS block browser host-page zoom on trackpad pinch (ctrlKey/metaKey) anywhere on the page
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+
+      // 2. If cursor is over the captured photo (#camera-viewport or #lightbox-canvas), pinch/scroll zooms the PHOTO!
+      const photoTarget = e.target.closest('#camera-viewport, #lightbox-canvas');
+      if (photoTarget) {
+        e.preventDefault();
+        const cvs = photoTarget.id === 'lightbox-canvas' ? lbCanvas : camCanvas;
+        const sensitivity = e.ctrlKey ? 0.012 : 0.0025;
+        const factor = Math.exp(-e.deltaY * sensitivity);
+        applyPhotoZoomAtPoint(cvs, factor, e.clientX, e.clientY);
+        return;
+      }
+
+      // 3. Allow normal vertical scrolling inside side-panel lists & modals (while still blocking ctrlKey pinch zoom above)
+      if (e.target.closest('#left-panel, #right-panel, #gis-modal, #photo-lightbox')) return;
+
+      // 4. Otherwise zoom the 3D terrain camera
+      e.preventDefault();
       if (e.ctrlKey) {
-        // Trackpad pinch-to-zoom
         targetSpherical.radius = Math.max(35, Math.min(500, targetSpherical.radius + e.deltaY * 0.35));
       } else {
         targetSpherical.radius = Math.max(35, Math.min(500, targetSpherical.radius + e.deltaY * 0.18));
       }
-    }, { passive: true });
+    }, { passive: false });
 
     function setCameraView(view) {
       autoOrbitActive = false;

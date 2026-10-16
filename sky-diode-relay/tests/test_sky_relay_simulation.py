@@ -37,6 +37,7 @@ from sky_transmitter import (
     package_udp_datagrams_for_optical,
     compute_sky_relay_energy_budget,
     derive_fhss_carrier_schedule,
+    get_rf_regulatory_profile,
     encode_vk7mo_lockin_frame,
     calculate_troposcatter_link_budget,
 )
@@ -936,6 +937,65 @@ def test_broadband_barrage_and_pulsed_chirp_jammer_immunity():
     print("    [+] Wideband Carrier Hopping, Barrage Gate & Pulsed/Chirp Jammer Immunity: PASSED")
 
 
+def test_civilian_eu_compliant_mode_and_link_budget():
+    print("[*] 24. Validating Peacetime Civilian EU/Traficom Mode (--civilian-eu-compliant, 2400-2483.5 MHz, <=100 mW EIRP)...")
+    fhss_key = "FINLAND-PEACETIME-CIVILIAN-KEY-2026"
+    payload = b'{"node":"NODE-SAIMAA-CIV-01","mode":"ETSI_EN_300_328_100MW","alert":"PERSON"}'
+
+    # 1. Verify Default Build D (Licensed / Test-Permit / Amateur Radio / Emergency Mode) remains unchanged
+    prof_licensed = get_rf_regulatory_profile(civilian_eu_compliant=False)
+    assert prof_licensed["license_required"] is True
+    assert prof_licensed["pa_gate_gp3"] == 1
+    assert prof_licensed["eirp_dbm"] == 42.5
+
+    # 2. Verify --civilian-eu-compliant (Traficom Regulation 15 / ETSI EN 300 328 license-exempt mode)
+    prof_civ = get_rf_regulatory_profile(civilian_eu_compliant=True)
+    assert prof_civ["license_required"] is False
+    assert prof_civ["pa_gate_gp3"] == 0 and prof_civ["pa_enabled"] is False
+    assert prof_civ["eirp_dbm"] <= 20.0 and prof_civ["eirp_mw"] <= 100.0
+
+    # Verify all hopped carriers stay strictly inside 2400.0 - 2483.5 MHz across 20 keys
+    for idx in range(20):
+        hops = derive_fhss_carrier_schedule(
+            f"{fhss_key}-{idx}", num_passes=3, civilian_eu_compliant=True
+        )
+        assert len(hops) == 3
+        for f_mhz in hops:
+            assert 2400.0 < f_mhz < 2483.5, f"Carrier {f_mhz} MHz outside 2400-2483.5 MHz ISM band!"
+        assert abs(hops[0] - hops[1]) >= 20.0
+        assert abs(hops[1] - hops[2]) >= 10.0
+
+    # 3. Verify end-to-end VK7MO lock-in transmission & demodulation in civilian_eu_compliant mode
+    tx_civ = encode_vk7mo_lockin_frame(
+        payload,
+        symbol_ms=16.0,
+        fhss_key=fhss_key,
+        civilian_eu_compliant=True,
+    )
+    assert tx_civ["civilian_eu_compliant"] is True
+    assert all(2400.0 < f < 2483.5 for f in tx_civ["carrier_schedule_mhz"])
+    rx_civ_samples, _ = simulate_vk7mo_scatter_channel(
+        tx_civ["waveform"], snr_db=-10.0, seed=9401
+    )
+    rx_civ = demodulate_vk7mo_lockin_stream(
+        rx_civ_samples,
+        symbol_ms=16.0,
+        fhss_key=fhss_key,
+        civilian_eu_compliant=True,
+    )
+    assert rx_civ["status"] == "OK" and rx_civ["payload"] == payload
+    assert rx_civ["civilian_eu_compliant"] is True
+
+    print(
+        f"    - Civilian EU/Traficom Mode: Carriers={tx_civ['carrier_schedule_mhz']} MHz (strictly inside 2400-2483.5 MHz) | "
+        f"PA Gate GP3={prof_civ['pa_gate_gp3']} (1W PA bypassed) | EIRP=+{prof_civ['eirp_dbm']} dBm ({prof_civ['eirp_mw']} mW)"
+    )
+    print(
+        f"    - VK7MO +55.8 dB Lock-In Decode at -10.0 dB SNR in Civilian 100 mW Mode -> 100% payload match!"
+    )
+    print("    [+] Peacetime Civilian EU/Traficom Mode (--civilian-eu-compliant): PASSED")
+
+
 if __name__ == "__main__":
     print("==================================================")
     print("SKY-DIODE-RELAY OPTICAL PROPAGATION TEST SUITE")
@@ -963,7 +1023,9 @@ if __name__ == "__main__":
     test_100km_troposcatter_rain_scatter_all_weather_link()
     test_simultaneous_cfo_jammer_and_rayleigh_multipath_fade()
     test_broadband_barrage_and_pulsed_chirp_jammer_immunity()
-    print("\n[ALL 23 SKY RELAY SIMULATION & FINNISH CLIMATE TESTS PASSED SUCCESSFULLY!]")
+    test_civilian_eu_compliant_mode_and_link_budget()
+    print("\n[ALL 24 SKY RELAY SIMULATION & FINNISH CLIMATE TESTS PASSED SUCCESSFULLY!]")
+
 
 
 
