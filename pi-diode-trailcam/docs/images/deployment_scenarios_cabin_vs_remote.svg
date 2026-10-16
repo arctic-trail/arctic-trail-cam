@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="860" viewBox="0 0 1200 860">
+<style>text{font-family:Arial,Helvetica,sans-serif;fill:#153546}.title{font-size:28px;font-weight:bold;fill:#0f2938}.sub{font-size:16px;fill:#486270}.head{font-size:19px;font-weight:bold;fill:#102a3a}.subhead{font-size:16px;font-weight:bold;fill:#1d4e66}.body{font-size:15px;fill:#1e3a47}.small{font-size:13px;fill:#3b5563}.badge{font-size:13px;font-weight:bold;fill:#ffffff}</style>
+<rect width="1200" height="860" fill="#f4f7f9"/>
+<text x="40" y="50" class="title">Supported Field Deployment Topologies: Cabin Nearby vs. Remote / Obstacle Crossing</text>
+<text x="40" y="78" class="sub">Identical camera node hardware supports direct fiber to a cabin (up to 10 km), a buried Dead-Drop Vault, or a COTS optical beam.</text>
+<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#256d85" stroke-width="1.8"/></marker><marker id="arrow-green" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#2e7d32" stroke-width="1.8"/></marker><marker id="arrow-amber" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#c76b00" stroke-width="1.8"/></marker></defs>
+<rect x="40" y="102" width="1120" height="235" rx="12" fill="#ebf5fb" stroke="#2e86c1" stroke-width="2"/>
+<rect x="56" y="116" width="640" height="30" rx="6" fill="#1b4f72"/>
+<text x="68" y="136" class="badge">SCENARIO A: CABIN OR OUTBUILDING SOMEWHAT CLOSE BY (30 m to 10 km)</text>
+<text x="710" y="136" class="subhead">Solution: Simply use a longer pre-terminated OS2 fiber spool!</text>
+<rect x="56" y="158" width="310" height="146" rx="10" fill="#ffffff" stroke="#2e86c1" stroke-width="1.8"/>
+<text x="72" y="188" class="head">1. Tree Split-Pod Camera Node</text>
+<text x="72" y="216" class="body">• Micro Pod (2m up tree) + Buried Vault</text>
+<text x="72" y="238" class="body">• Media Converter #1 TX (1310nm, -3 dBm)</text>
+<text x="72" y="260" class="body">• 1x2 Splitter Out 1 -&gt; Local RX Loopback</text>
+<text x="72" y="282" class="body">• 1x2 Splitter Out 2 -&gt; Outbound Fiber (-6.8 dBm)</text>
+<rect x="435" y="158" width="330" height="146" rx="10" fill="#ffffff" stroke="#2e86c1" stroke-width="1.8"/>
+<text x="451" y="188" class="head">2. Moss-Buried 3mm Armored OS2 Fiber</text>
+<text x="451" y="216" class="body">• Simply plug in 50m, 300m, 1km, or 10km spool</text>
+<text x="451" y="238" class="body">• 1310nm single-mode loss is only 0.35 dB/km!</text>
+<text x="451" y="260" class="body">• +13.2 dB link margin = &gt;10 km with ZERO repeaters</text>
+<text x="451" y="282" class="body">• Tucked 2cm under moss; 100% snow/fog immune</text>
+<rect x="835" y="158" width="305" height="146" rx="10" fill="#ffffff" stroke="#2e86c1" stroke-width="1.8"/>
+<text x="851" y="188" class="head">3. Indoor Cabin Collector Hub</text>
+<text x="851" y="216" class="body">• Media Converter #2 (RX connected; TX capped)</text>
+<text x="851" y="238" class="body">• Cat6 RJ45 -&gt; Cabin Mac / Linux / Pi Hub</text>
+<text x="851" y="260" class="body">• Runs receiver_hub.py + dashboard_server.py</text>
+<text x="851" y="282" class="body">• Real-time verified JPEGs + local alerts</text>
+<line x1="366" y1="235" x2="435" y2="235" stroke="#1b4f72" stroke-width="2.2" marker-end="url(#arrow)"/>
+<text x="380" y="225" class="small">SC/UPC</text>
+<line x1="765" y1="235" x2="835" y2="235" stroke="#1b4f72" stroke-width="2.2" marker-end="url(#arrow)"/>
+<text x="758" y="225" class="small">1310nm Light</text>
+<rect x="40" y="358" width="1120" height="475" rx="12" fill="#fef9e7" stroke="#b7950b" stroke-width="2"/>
+<rect x="56" y="372" width="760" height="30" rx="6" fill="#7d6608"/>
+<text x="68" y="392" class="badge">SCENARIO B: NO CABIN NEARBY — OR CROSSING A RIVER / STRAIT / PUBLIC ROAD</text>
+<text x="830" y="392" class="subhead">Three Practical COTS Modes (Fiber Vault, Water FSO &amp; 20km Troposcatter)</text>
+<rect x="56" y="416" width="535" height="234" rx="10" fill="#ffffff" stroke="#b7950b" stroke-width="1.8"/>
+<text x="72" y="446" class="head">MODE B1: No Cabin Nearby -&gt; Buried &#x27;Dead-Drop&#x27; Collector Vault (100m–500m in Woods)</text>
+<text x="72" y="474" class="body">• How It Works: Run 100m–300m of 3mm armored fiber under the moss from the Tree Camera Node</text>
+<text x="72" y="496" class="body">  deep into the forest (away from the trail/road) to a 2nd buried waterproof QILIPSU vault.</text>
+<text x="72" y="518" class="body">• Inside the Dead-Drop Vault: Media Converter #2 (RX) + Headless Pi / SSD + 12V Battery</text>
+<text x="72" y="540" class="body">  running `receiver_hub.py --max-alerts 1000` (circular disk cap).</text>
+<text x="72" y="562" class="body">• Why This Beats On-Camera SD Storage: Even if a burglar spots and destroys the camera,</text>
+<text x="72" y="584" class="body">  the signed high-res JPEGs were already transmitted at light speed 200m away into the hidden vault!</text>
+<text x="72" y="606" class="body">• Retrieval / Optional Remote Uplink: Extract via `receiver_hub.py --export-bundle alerts.zip`</text>
+<text x="72" y="628" class="body">  OR attach `sky-diode-relay` Build D (200m–20km Troposcatter) to the Vault 200m away (camera stays 0.00W RF!).</text>
+<rect x="608" y="416" width="535" height="234" rx="10" fill="#ffffff" stroke="#2e7d32" stroke-width="1.8"/>
+<text x="624" y="446" class="head">MODE B2: River / Strait / Road Crossing -&gt; COTS Free-Space Optical (FSO) Beam</text>
+<text x="624" y="474" class="body">• When to Use: A river, Saimaa water strait, or paved road blocks laying a 3mm fiber cable.</text>
+<text x="624" y="496" class="body">• Can We Buy a Cheap Existing Beam System? YES — Two COTS Options (Zero Custom Soldering):</text>
+<text x="624" y="518" class="body">  1. Plug-and-Play Fiber Collimators on Existing Media Converters ($200–$280 pair, 5m–80m LOS):</text>
+<text x="624" y="540" class="body">     Screw two US-made Thorlabs (F220FC-1310 / F280FC-C) or Edmund Optics SC/FC collimators</text>
+<text x="624" y="562" class="body">     directly onto Converter #1 TX and Converter #2 RX! Mount on rigid low bedrock/ground stakes</text>
+<text x="624" y="584" class="body">     (never high on a swaying tree). Shoots an invisible 1310nm 1 Gbps laser beam across the gap.</text>
+<text x="624" y="606" class="body">  2. Industrial IP67 Optical Data Transceivers (Leuze DDLS 200 / Sick ISD400, Made in Germany):</text>
+<text x="624" y="628" class="body">     Turnkey 100 Mbps Ethernet optical beam (100m–500m range, wide beam tolerance; ~$250–$450 surplus).</text>
+<rect x="56" y="682" width="1087" height="124" rx="10" fill="#fcf3cf" stroke="#9a7d0a" stroke-width="1.8"/>
+<text x="72" y="712" class="head">MODE B3 (Ordered Build D — 10-Line COTS BOM): 200 m – 20 km All-Weather 2.4 GHz Troposcatter &amp; Canopy-Bounce (`sky-diode-relay`)</text>
+<text x="72" y="740" class="body">• Zero-trenching 200m–20km over-the-hill NLOS link: ADALM-PLUTO SDRs + Skyworks SE2576L 1W PA + SKY65405 1.2dB NF LNA + VBF-2435+ Filters + 14dBi Panels.</text>
+<text x="72" y="762" class="body">• Bounces VK7MO lock-in frames (+55.8 dB gain) off tropospheric turbulence, rain/snow clouds &amp; forest canopies (+14.1 dB to +62.3 dB SNR across all seasons).</text>
+<text x="72" y="784" class="body">• 6-Layer Electronic Anti-Jamming: Hops into 2380/2488 MHz out-of-ISM guard bands outside Wi-Fi/drone jammers + MAD barrage rejection (23/23 tests pass).</text>
+</svg>

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="740" viewBox="0 0 1200 740">
+<style>text{font-family:Arial,Helvetica,sans-serif;fill:#153546}.title{font-size:28px;font-weight:bold;fill:#0f2938}.sub{font-size:16px;fill:#486270}.head{font-size:19px;font-weight:bold;fill:#102a3a}.subhead{font-size:16px;font-weight:bold;fill:#1d4e66}.body{font-size:15px;fill:#1e3a47}.small{font-size:13px;fill:#3b5563}.badge{font-size:13px;font-weight:bold;fill:#ffffff}</style>
+<rect width="1200" height="740" fill="#f4f7f9"/>
+<text x="40" y="50" class="title">Bench Harness — Pin Connections</text>
+<text x="40" y="78" class="sub">Generated from WIRING_PINOUT.md. Physical pin numbers and BCM GPIO numbers are distinct.</text>
+<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#256d85" stroke-width="1.8"/></marker><marker id="arrow-green" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#2e7d32" stroke-width="1.8"/></marker><marker id="arrow-amber" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#c76b00" stroke-width="1.8"/></marker></defs>
+<rect x="40" y="130" width="1120" height="56" fill="#dceaf0" stroke="#d0dde3"/>
+<text x="55" y="165" class="head">Signal</text>
+<text x="275" y="165" class="head">Source</text>
+<text x="780" y="165" class="head">Destination</text>
+<rect x="40" y="186" width="1120" height="56" fill="#ffffff" stroke="#d0dde3"/>
+<text x="55" y="221" class="body">Sensor power (W1 Red)</text>
+<text x="275" y="221" class="body">Pico physical 36, 3V3_OUT (Right Row 5, Hole j5)</text>
+<text x="780" y="221" class="body">QMC5883L VCC (Row 24, Hole f24)</text>
+<rect x="40" y="242" width="1120" height="56" fill="#eaf0f3" stroke="#d0dde3"/>
+<text x="55" y="277" class="body">Sensor ground (W2 Black)</text>
+<text x="275" y="277" class="body">Pico physical 38, GND (Right Row 3, Hole j3)</text>
+<text x="780" y="277" class="body">QMC5883L GND (Row 25, Hole g25)</text>
+<rect x="40" y="298" width="1120" height="56" fill="#ffffff" stroke="#d0dde3"/>
+<text x="55" y="333" class="body">I2C SDA (W3 Blue)</text>
+<text x="275" y="333" class="body">Pico physical 6, GP4 (Left Row 6, Hole b6)</text>
+<text x="780" y="333" class="body">QMC5883L SDA (Row 27, Hole f27)</text>
+<rect x="40" y="354" width="1120" height="56" fill="#eaf0f3" stroke="#d0dde3"/>
+<text x="55" y="389" class="body">I2C SCL (W4 Yellow)</text>
+<text x="275" y="389" class="body">Pico physical 7, GP5 (Left Row 7, Hole a7)</text>
+<text x="780" y="389" class="body">QMC5883L SCL (Row 26, Hole g26)</text>
+<rect x="40" y="410" width="1120" height="56" fill="#ffffff" stroke="#d0dde3"/>
+<text x="55" y="445" class="body">Telemetry TX (W5 Purple)</text>
+<text x="275" y="445" class="body">Pico physical 11, GP8 (Left Row 11, Hole a11)</text>
+<text x="780" y="445" class="body">Pi physical 10, GPIO15 RX (5th down on right)</text>
+<rect x="40" y="466" width="1120" height="56" fill="#eaf0f3" stroke="#d0dde3"/>
+<text x="55" y="501" class="body">DONE (W6 Orange)</text>
+<text x="275" y="501" class="body">Pi physical 16, GPIO23 (8th down on right)</text>
+<text x="780" y="501" class="body">Pico physical 4, GP2 (Left Row 4, Hole a4)</text>
+<rect x="40" y="522" width="1120" height="56" fill="#ffffff" stroke="#d0dde3"/>
+<text x="55" y="557" class="body">Shared ground (W7 Black)</text>
+<text x="275" y="557" class="body">Pico physical 13, GND (Left Row 13, Hole a13)</text>
+<text x="780" y="557" class="body">Pi physical 14, GND (7th down on right)</text>
+<text x="40" y="625" class="body">Use suitable USB supplies. Leave the 12 V battery disconnected for this initial bench exercise.</text>
+<text x="40" y="658" class="body">Set BENCH_MAG_ONLY = True (or GP14->GND jumper) to trigger full wake cycles from magnet passes on the bench.</text>
+<text x="40" y="691" class="sub">In field deployment, PROFILE_MAG_RADAR_DUTY or PROFILE_FULL_TRIPLE requires radar or dual-sensor confirmation.</text>
+</svg>

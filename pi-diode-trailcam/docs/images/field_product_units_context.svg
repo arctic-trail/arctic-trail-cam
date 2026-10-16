@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="820" viewBox="0 0 1200 820">
+<style>text{font-family:Arial,Helvetica,sans-serif;fill:#153546}.title{font-size:28px;font-weight:bold;fill:#0f2938}.sub{font-size:16px;fill:#486270}.head{font-size:19px;font-weight:bold;fill:#102a3a}.subhead{font-size:16px;font-weight:bold;fill:#1d4e66}.body{font-size:15px;fill:#1e3a47}.small{font-size:13px;fill:#3b5563}.badge{font-size:13px;font-weight:bold;fill:#ffffff}</style>
+<rect width="1200" height="820" fill="#f4f7f9"/>
+<text x="40" y="50" class="title">Product Units in Context of Use: 3-Zone Covert Split-Pod Architecture</text>
+<text x="40" y="78" class="sub">Separates the fist-sized tree sensor head from the moss-buried battery/compute vault for maximum burglary &amp; tamper survival.</text>
+<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#256d85" stroke-width="1.8"/></marker><marker id="arrow-green" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#2e7d32" stroke-width="1.8"/></marker><marker id="arrow-amber" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#c76b00" stroke-width="1.8"/></marker></defs>
+<rect x="40" y="105" width="440" height="675" rx="12" fill="#e6efe6" stroke="#6c8f6e" stroke-width="2"/>
+<text x="60" y="138" class="head">FOREST TRAIL MOUNTING CONTEXT</text>
+<text x="60" y="162" class="small">Camera angled 25 deg obliquely down approach path (45m FOV)</text>
+<path d="M 40 640 Q 180 615 320 635 T 480 630 L 480 780 L 40 780 Z" fill="#5d4734"/>
+<path d="M 40 632 Q 180 605 320 625 T 480 622 L 480 652 L 40 652 Z" fill="#4f7942"/>
+<text x="58" y="758" class="badge">GROUND / ROOT HOLLOW (2cm Forest Moss Cover)</text>
+<rect x="175" y="180" width="96" height="455" fill="#6e4f3a" stroke="#4a3324" stroke-width="2"/>
+<line x1="200" y1="185" x2="200" y2="630" stroke="#523928" stroke-width="2" stroke-dasharray="14,8"/>
+<line x1="245" y1="190" x2="245" y2="630" stroke="#523928" stroke-width="2" stroke-dasharray="18,10"/>
+<line x1="125" y1="265" x2="125" y2="625" stroke="#153546" stroke-width="2"/>
+<line x1="112" y1="265" x2="138" y2="265" stroke="#153546" stroke-width="2"/>
+<line x1="112" y1="625" x2="138" y2="625" stroke="#153546" stroke-width="2"/>
+<text x="62" y="445" class="subhead">1.8–2.2 m</text>
+<text x="62" y="465" class="small">(Above eye line)</text>
+<rect x="202" y="242" width="46" height="68" rx="6" fill="#3b4d36" stroke="#222e1f" stroke-width="2"/>
+<circle cx="225" cy="264" r="9" fill="#11181c" stroke="#6d8267" stroke-width="1.5"/>
+<rect x="213" y="284" width="24" height="14" rx="2" fill="#4e5e44" stroke="#2c3826"/>
+<rect x="258" y="232" width="205" height="54" rx="6" fill="#1b4332"/>
+<text x="268" y="253" class="badge">ZONE 1: MICRO SENSOR POD</text>
+<text x="268" y="273" class="badge" style="font-weight:normal">Hammond 1591BSBK (112x62x31mm)</text>
+<path d="M 225 310 C 228 400, 220 510, 235 645" fill="none" stroke="#3f5e36" stroke-width="7" stroke-dasharray="10,4"/>
+<rect x="258" y="425" width="205" height="54" rx="6" fill="#2d5a27"/>
+<text x="268" y="446" class="badge">ZONE 2: CAMO UMBILICAL</text>
+<text x="268" y="466" class="badge" style="font-weight:normal">2m Wrapped in Gear Aid Camo Form</text>
+<rect x="150" y="648" width="190" height="92" rx="8" fill="#37474f" stroke="#1c262b" stroke-width="2.5"/>
+<text x="165" y="673" class="badge">ZONE 3: BURIED BASE VAULT</text>
+<text x="165" y="693" class="badge" style="font-weight:normal">QILIPSU IP67 (285x195x130mm)</text>
+<text x="165" y="713" class="badge" style="font-weight:normal">Battery + Pi 5 + Pico + Diode</text>
+<path d="M 340 705 L 475 705" stroke="#111111" stroke-width="6"/>
+<text x="348" y="694" class="badge">3mm Armored OS2 Fiber -></text>
+<rect x="510" y="105" width="650" height="158" rx="10" fill="#ffffff" stroke="#3b6e52" stroke-width="1.8"/>
+<text x="526" y="135" class="head">ZONE 1: Tree-Mounted Covert Micro Sensor Pod (Hammond 1591BSBK — 112 x 62 x 31 mm)</text>
+<text x="526" y="163" class="body">• Camouflage: Rust-Oleum Ultra-Flat Earth Brown base + Deep Forest Green bark stencil (Zero metal)</text>
+<text x="526" y="188" class="body">• Camera + Night Vision: Arducam IMX708 NoIR + 940nm invisible IR array behind black neoprene baffle ring</text>
+<text x="526" y="213" class="body">• 24 GHz FMCW Radar: HLK-LD2450 shoots straight through unpainted/non-metallic ABS front wall (no hole needed)</text>
+<text x="526" y="238" class="body">• Anti-Theft Advantage: Fist-sized (&lt;4.5 in) pod tucked into bark crevice 2m up; zero LEDs, zero noise, zero RF Wi-Fi</text>
+<rect x="510" y="290" width="650" height="133" rx="10" fill="#ffffff" stroke="#4d7c43" stroke-width="1.8"/>
+<text x="526" y="320" class="head">ZONE 2: Concealed Trunk Umbilical (1.8 m – 2.2 m Along Natural Bark Groove)</text>
+<text x="526" y="348" class="body">• Bundled Harness: Flexible camera ribbon + 4-wire radar UART (5V/GND/TX/RX) + 12V switched IR LED pair</text>
+<text x="526" y="373" class="body">• Concealment: Wrapped in Gear Aid Camo Form (self-clinging matte fabric tape — zero sticky residue, zero shine)</text>
+<text x="526" y="398" class="body">• Advance Trigger Line (At Ground Level): QMC5883L magnetometer (&lt;1.5m I2C) + SM-24 geophone (40–60m twisted pair)</text>
+<rect x="510" y="450" width="650" height="283" rx="10" fill="#ffffff" stroke="#37474f" stroke-width="1.8"/>
+<text x="526" y="480" class="head">ZONE 3: Moss-Buried Base Vault (QILIPSU IP67 — 285 x 195 x 130 mm in Root Hollow)</text>
+<text x="526" y="508" class="body">• Primary Power: ExpertPower 12V 12Ah AGM Battery -&gt; Littelfuse 0FHA0030XP Inline Holder (5A Blade Fuse)</text>
+<text x="526" y="533" class="body">• Domain A (Always-On &lt;2 mA): Adafruit MPM3610 5V Buck -&gt; Pico 2 Gatekeeper + QMC5883L + ADS1115 16-bit ADC</text>
+<text x="526" y="558" class="body">• Domain B (High-Side Switched +12V): Adafruit STEMMA Relay (GP15) -&gt; 12V-to-5V 5A Buck Converter</text>
+<text x="526" y="583" class="body">• Compute &amp; AI: Raspberry Pi 5 (8GB) + Active Cooler + Hailo-8L NPU + Official Pi 5 J5 RTC Battery</text>
+<text x="526" y="608" class="body">• Physics-Enforced Optical Data Diode (5V DC Barrel Powered Media Converter):</text>
+<text x="526" y="633" class="body">    - Converter #1 Optical TX (1310nm, -3 dBm) -&gt; 1x2 Single-Mode 50/50 SC/UPC PLC Optical Splitter Input</text>
+<text x="526" y="658" class="body">    - Splitter Output 1 (-6.8 dBm) -&gt; Converter #1 Optical RX (Local Loopback satisfies 1000BASE-LX FEFI!)</text>
+<text x="526" y="683" class="body">    - Splitter Output 2 (-6.8 dBm) -&gt; SC/UPC Coupler -&gt; 3mm Armored OS2 Fiber exiting bottom M20 IP68 gland</text>
+<text x="526" y="708" class="body">• Condensation Control: M12 ePTFE pressure-equalizing breather vent + parallel PTC lens heater (t=0.25..4.25s)</text>
+</svg>
