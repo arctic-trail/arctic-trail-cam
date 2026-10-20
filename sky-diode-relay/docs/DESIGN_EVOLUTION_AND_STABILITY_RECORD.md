@@ -80,7 +80,7 @@ A natural question is: *If cabin burglars rarely operate during heavy blizzards 
 3. **10-Item Non-Chinese DigiKey Order Submitted:**
    * Every part is **In Stock**, **100% non-Chinese** (USA, UK, Canada, Japan), and operates on a **single unified `5.0V DC` rail** (`TDK-Lambda LS50-5`, `285-1824-ND`).
 
-![Pin-Accurate Blueprint & Ordered 10-Line DigiKey BOM](images/sky_relay_20km_troposcatter_blueprint.png)
+![Build D Receiver: Filtering, Low-Noise Amplification, Coherent Integration](images/sky_relay_20km_troposcatter_blueprint.png)
 
 ### B. Three Practical Assembly Details to Keep in Mind When Building (`~35–45 Minutes Total`, Zero Soldering)
 

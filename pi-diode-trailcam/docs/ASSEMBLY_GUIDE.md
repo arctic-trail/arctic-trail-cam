@@ -37,6 +37,8 @@ The **Zone 1 Micro-Pod** is the tiny, fist-sized black ABS box (`112 × 62 × 31
 
 ![Device 1 Reference: Inside the Zone 1 Camera & Radar Pod](images/device_1_camera_radar_pod.jpg)
 
+![Night Vision and Frost Control: Invisible 940 nm Illumination, Foam Baffle & Window De-Icer](images/slide_night_ir_and_deicer.jpg)
+
 ### Parts & Tools Used in Stage 4
 
 * **Parts:** `[P05]` (`Raspberry Pi Camera Module 3 NoIR Wide` or `Arducam IMX708 NoIR` Camera), `[P06]` (`200 mm` `22-to-15-pin` Ribbon `$9.99` + optional **`Arducam CSI-to-HDMI Extension Kit w/ 2.0 m Shielded Cable` `ASIN B06XDNBM63` `$18.99` for 2 m split-pod umbilical**), `[P11]` (`HLK-LD2450` $24\text{ GHz}$ Radar PCB + Harness — `$10.94`), `[P20]` (`Hammond 1591BSBK` Black ABS Box `$7.45` [factory `IP54` lap-joint; requires `Permatex 81158` perimeter lid-channel silicone gasket] or drop-in **`Hammond 1554EGY` factory `IP68` gasketed box** `$13.50` + `30 mm` Glass Disc `$6.49` + Black Neoprene Foam Ring `$7.99` + **`39-Ohm 5W` Ceramic De-Icer Resistor (`3.69 W` @ `12.0V`)** `$1.99` + `M12 IP68` bottom cable gland `$1.99` = `$25.91`), `[P22]` (`Rust-Oleum` Ultra-Flat Earth Brown `$8.98` & Deep Forest Green `$8.98` spray paint + `Gear Aid Camo Form` `$14.95` = `$32.91`).
@@ -219,6 +221,8 @@ Before closing the `QILIPSU` vault for unattended field operation, transition th
    * **Backfill with `5–10 cm` of Soil & Living Forest Moss (`Sphagnum / Pleurozium`):** Lay the lifted carpet of living forest moss, pine duff, and soil (`5–10 cm` thick) back over the top of the insulated vault so **100% of the box is underground and invisible** from the trail.
    * **Why Underground Burial + Foam Insulation Doubles Cold-Weather Battery Autonomy (WITH vs. WITHOUT Comparison):** Even when Arctic air plunges to **`-35°C to -40°C`** (`-45°C` under snow), geothermal heat from the forest soil combined with the `R-value` of closed-cell foam, moss, and winter snowpack keeps the buried battery compartment between **`-2°C and -8°C`**—preventing electrolyte freezing, eliminating any thermal hot-spot visible to FLIR cameras, and preserving full **`1.5 to 2.5+ year` battery life**!
 
+![Arctic Thermal Design: Ground Warmth Protects the Battery](images/slide_arctic_thermal_burial.jpg)
+
 | Component / Configuration | Reliable Cold-Weather Limit (Outside Air) | Internal Vault / Battery Temp | Usable Battery Capacity & Runtime (`12Ah` AGM / `24Ah` LiFePO4) | Why It Stops / Survival Mechanism |
 | :--- | :---: | :---: | :---: | :--- |
 | **Zone 1 Tree Micro-Pod (`[P20]` at `2.0 m` in open air)** | **`-35°C to -40°C` (`-31°F to -40°F`)** | Equal to outside air (`+12°C` at lens during `3.69W` de-ice pulse) | *Powered from Zone 3 via `2 m` umbilical* | Contains zero batteries or liquid electrolytes—only solid-state `IMX708` CMOS, `LD2450` MMIC radar, and the `39 Ω, 5W` ceramic window de-icer resistor (`[P12-HEAT]`). |
@@ -229,11 +233,13 @@ Before closing the `QILIPSU` vault for unattended field operation, transition th
 
 ### Step 6.2 — Connect Your Collector Unit (Choose Your Scenario: `A`, `B1`, `B2`, or `B3`)
 
-Look at the two illustrations below to choose the exact Collector setup that matches your property:
+Look at the three illustrations below to choose the exact Collector setup that matches your property:
 
-![Device 3 Reference: Cabin Collector Hub (3A) vs. Buried Woods Dead-Drop & 200m–20km Troposcatter NLOS Relay Vault (3B)](images/device_3_collector_units.jpg)
+![Configuration 1 — Direct Fiber to Cabin (Scenario A: 30 m to 10 km)](images/deployment_scenarios_cabin_vs_remote.jpg)
 
-![Supported Deployment Topologies: Cabin Nearby (Scenario A) vs. No Cabin / 200m–20km Over-the-Hill (Scenarios B1, B2, B3)](images/deployment_scenarios_cabin_vs_remote.jpg)
+![Configuration 2 — Woods Dead-Drop Vault (Scenario B1: 200 m Fiber Standoff)](images/device_3_collector_units.jpg)
+
+![Configuration 3 — Water-Strait Laser Bridge (Scenario B2: 10 m to 100 m Optical Crossing)](images/slide_config3_water_laser_bridge.jpg)
 
 * **If You Have a Cabin Within `30 m` to `10 km` (`Scenario A — Direct Moss-Buried Fiber`):**
   1. Unroll the `3 mm` black steel-tube armored single-mode OS2 fiber cable (`[P16]`) from the tree's Zone 3 Base Vault to your cabin, pressing it `2 cm` under the soft forest moss with a garden trowel (`no trench digging needed`).

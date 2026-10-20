@@ -2,6 +2,8 @@
 
 This document owns acceptance procedures. The [master decisions and roadmap](../../PROJECT_DECISIONS_AND_ROADMAP.md) owns the 1–2 week delivery timeline and architecture gates; a passing simulation is not a substitute for these measurements. Record exact hardware, software revision, settings, ambient conditions, and raw logs for every run. Agree required thresholds before testing.
 
+![Validation Roadmap: Bench Bring-Up to Arctic Soak Testing](images/slide_validation_roadmap.jpg)
+
 ## Stage 1 — bench and actual software path
 
 Use a current-limited supply and corrected [wiring](WIRING_PINOUT.md). Confirm the selected sensors, power outputs, camera images, model execution, UART telemetry, and DONE cutoff individually. Exercise the actual sender and receiver with rejected signatures, blank/reused nonces, restarts, lost/corrupted chunks, repeated identical images, model failure, and disk failure.

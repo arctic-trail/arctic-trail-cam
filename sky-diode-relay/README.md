@@ -8,9 +8,9 @@
 >   * **Peacetime License-Exempt Civilian Mode (`--civilian-eu-compliant` / `civilian_eu_compliant=True`, Zero Hardware Changes):** Passing `--civilian-eu-compliant` restricts all FHSS carrier hops strictly inside **`2400.0–2483.5 MHz`** (`2402–2480 MHz`), sets `Pico 2 GP3 = LOW` (`0.0 V`) to disable/bypass the `1.0 W` PA, and sets the `ADALM-PLUTO` SDR TX output to `+7.5 dBm` so total EIRP with the `14 dBi` panel antenna stays at **`<= +20.0 dBm` (`100 mW` EIRP)** in full compliance with **Traficom Regulation 15 and EU ETSI EN 300 328**, while `VK7MO`'s `+55.8 dB` coherent processing gain still bridges multi-kilometer NLOS forest paths!
 > * **Optical Reference Architectures (`Builds A / B / C`):** Also supports `8-PPM` + `VK7MO` lock-in optical transmission (`1550 nm` eye-safe DFB laser FSO/cloud-bounce and `265 nm` solar-blind UV-C scatter).
 
-![200 m – 20 km All-Weather Troposcatter & Canopy-Bounce System in Context](docs/images/sky_diode_beam_system_in_context.jpg)
+![Build D Transmitter: 200 m Setback + 2.4 GHz Directional Launch](docs/images/sky_diode_beam_system_in_context.jpg)
 
-![Pin-Accurate Engineering Blueprint & 10-Line DigiKey BOM](docs/images/sky_relay_20km_troposcatter_blueprint.png)
+![Build D Receiver: Filtering, Low-Noise Amplification, Coherent Integration](docs/images/sky_relay_20km_troposcatter_blueprint.png)
 
 | Topic | Maintained Location |
 | :--- | :--- |
@@ -56,7 +56,7 @@ The software, firmware, and physical modeling stack in this package implements a
 7. **Cycle-Exact RP2040/RP2350 PIO TX/RX State Machines & Safety Interlocks (`pio_pulse_modulator.pio`, `pio_pulse_receiver.pio`):**
    * Provides cycle-accurate $10\text{ ns}$ TX pulse packing with a hardware duty-cycle safety interlock (`pack_pio_timing_words`) and $20\text{ ns}$ RX Time-to-Digital Converter (TDC) unpacking (`unpack_pio_rx_timestamps`).
 
-![Sky-Diode-Relay System Boundary & Build D Overview](docs/images/optional_sky_beam.svg)
+![Store-and-Forward with Error Correction: Built for Fading Channels](docs/images/slide_store_and_forward_fec.jpg)
 
 ## Assembly Time & Hardware Bring-Up Checklist
 

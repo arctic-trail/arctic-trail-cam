@@ -6,7 +6,7 @@
 > * **Software, Codec, FEC & Anti-Jamming Stack:** **`100%` Complete & Verified (`24/24` Automated Simulation Tests Passing)**.
 > * **Assembly Time:** **`~35–45 minutes total`** for both nodes (`~15 min` TX node + `~15 min` RX node + `~10 min` USB/software check) with **zero soldering**.
 
-![Pin-Accurate Blueprint & Ordered 10-Line DigiKey BOM](images/sky_relay_20km_troposcatter_blueprint.png)
+![Build D Receiver: Filtering, Low-Noise Amplification, Coherent Integration](images/sky_relay_20km_troposcatter_blueprint.png)
 
 ---
 

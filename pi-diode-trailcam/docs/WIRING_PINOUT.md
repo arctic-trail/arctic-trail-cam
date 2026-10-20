@@ -34,6 +34,8 @@ Power the `Raspberry Pi 5 (8GB) [P01]` (`27W USB-C`) and `Raspberry Pi Pico 2 [P
 
 ## Additional firmware interfaces & complete split-pod field harness (`Stages 4–5`)
 
+![Wake and Power Sequence: Milliamps All Week, Watts for Seven Seconds](images/slide_wake_and_power_sequence.jpg)
+
 | Function | `Pico 2 [P07]` GPIO | Exact Switching Module & Pin-Level Field Connection |
 |---|---|---|
 | **Domain B main power (`Pi 5` + `Media Converter #1`)** | `GP15` (`Pin 20`) | Drives `SIG` on **`Adafruit STEMMA High-Side Relay #1 (PID 4409)` (`[P12]`)** (`VIN = 3V3_OUT`, `GND = GND`). Relay `COM` connects to fused `+12.0V` battery (`[P17]`/`[P18]`); Relay `NO` feeds the `12V-to-5V 5A (25W)` Buck (`[P12]`) powering `Raspberry Pi 5 [P01]` and `StarTech Media Converter #1 [P13]`. |
@@ -46,6 +48,10 @@ Power the `Raspberry Pi 5 (8GB) [P01]` (`27W USB-C`) and `Raspberry Pi Pico 2 [P
 | **`2.0 m` Split-Pod Camera Bus (`Zone 1` $\leftrightarrow$ `Zone 3`)** | `Pi 5 CAM/DISP 0` | **Indoor bench (`200 mm`):** `Raspberry Pi Camera Module 3 NoIR Wide (IMX708) [P05]` connects directly to `Pi 5 J4 CAM/DISP 0` via the `200 mm` `22-pin to 15-pin` FPC ribbon (`[P06]`).<br>**Separated `2.0 m` Tree Pod (`Stage 4–5`):** `Pi 5 J4 CAM/DISP 0` (`200 mm` `22-to-15-pin` ribbon) $\rightarrow$ **`Arducam CSI-to-HDMI Base Adapter (ASIN B06XDNBM63, [P06])`** $\rightarrow$ **`2.0 m` Round Shielded HDMI Cable** through `M20`/`M12` glands $\rightarrow$ **`Arducam CSI-to-HDMI Pod Adapter`** inside Zone 1 $\rightarrow$ `Camera Module 3 NoIR Wide [P05]` (plus auxiliary `AUX1`/`AUX2` lines for the `39 Ω 5W` heater). |
 
 ## Converter supply and optical topology
+
+![Why Ethernet Media Converters Need a Loopback Splitter to Work One Way](images/slide_optical_diode_loopback.jpg)
+
+![Signed Message Journey: Three Copies Out, Zero Path Back](images/slide_signed_message_journey.jpg)
 
 **StarTech MCMGBSCSM10 (`[P13]`) requires 5 V DC, center positive. Do not connect it to a switched 12 V output.** Its supplied adapter is rated 5 V, 2 A (or use the `StarTech 5V USB-to-Barrel Cable [P19]`). Confirm the connector and polarity on the actual unit. These details and the standard 10 km / 0–50°C ratings come from the [manufacturer datasheet](https://media.startech.com/cms/pdfs/mcmgbscsm10_datasheet.pdf); they do not establish performance in the proposed splitter arrangement.
 
