@@ -1,0 +1,39 @@
+;
+; File: sky-diode-relay/transmitter/pio_pulse_modulator.pio
+; Description: RP2040 PIO Microsecond Pulse-Position Modulation (PPM) Driver
+; License: MIT
+;
+; Generates sub-microsecond optical pulse bursts with zero CPU interrupt jitter.
+; Operates at 100 MHz clock (10 ns per instruction cycle).
+;
+.program pio_pulse_modulator
+
+; Pull 32-bit word from FIFO containing:
+;   - Lower 16 bits (X): Inter-pulse pre-delay loop count (exact 100 ns per step @ 100 MHz for all X >= 0)
+;   - Upper 16 bits (Y): Optical pulse high width loop count (high duration = (Y + 2) * 10 ns @ 100 MHz)
+; Fail-safe invariant: Output pin is driven LOW before waiting on TX FIFO so an empty
+; FIFO or stalled host CPU can never leave the GaN laser/UVC driver energized.
+.wrap_target
+entry:
+    set pins, 0                 ; 1 cyc: Fail-safe guarantee driver OFF while waiting for FIFO
+    pull block                  ; 1 cyc: Wait for next 32-bit PPM timing word from TX FIFO
+    out x, 16                   ; 1 cyc: Lower 16 bits = Inter-pulse delay count (in 100ns steps)
+    out y, 16                   ; 1 cyc: Upper 16 bits = Optical pulse width count (y = ticks - 2)
+
+slot_delay_loop:
+    jmp !x pulse_guard          ; 1 cyc: Exit delay loop when X == 0 (exact X iterations of 10 cycles)
+    jmp x-- slot_delay_loop [8] ; 9 cyc: Decrement X and loop (1 + 9 = 10 cycles = 100 ns @ 100 MHz)
+
+pulse_guard:
+    jmp !y entry                ; 1 cyc: Safety guard: if Y == 0, never assert pin HIGH
+
+pulse_high:
+    set pins, 1                 ; 1 cyc: Turn ON GaN driver (pin transitions HIGH)
+pulse_width_loop:
+    jmp y-- pulse_width_loop    ; (Y + 1) cyc: High pulse hold loop (10 ns per cycle)
+
+pulse_low:
+    set pins, 0                 ; 1 cyc: Turn OFF GaN driver immediately (total HIGH = (Y + 2) * 10 ns)
+.wrap
+
+

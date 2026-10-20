@@ -1,0 +1,19 @@
+# Ignore private personal data, orders, and receipts
+_private/
+pi-diode-trailcam/_private/
+
+# Ignore Python virtual environment and bytecode
+.venv/
+__pycache__/
+*.pyc
+
+# Ignore macOS and editor artifacts
+.DS_Store
+*.tmp
+*.swp
+*~
+.vscode/
+.idea/
+verified_alerts/
+demo_verified_output/
+pi-diode-trailcam/tests/verified_dual_alerts/
