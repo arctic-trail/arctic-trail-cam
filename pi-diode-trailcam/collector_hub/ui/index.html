@@ -704,7 +704,6 @@
       </div>
       <div style="display:flex;gap:5px;align-items:center;">
         <button class="btn-sm active" id="btn-grid-src-picam" onclick="setLiveStreamSource('pi_camera')" style="padding:2px 7px;font-size:9.5px;" title="Stream live physical IMX708 camera from Raspberry Pi 5">📹 Live Pi 5 Camera</button>
-        <button class="btn-sm" id="btn-grid-src-video" onclick="setLiveStreamSource('video_file')" style="padding:2px 7px;font-size:9.5px;" title="Stream recorded test video">🎞️ Recorded Video</button>
         <button class="btn-sm active" id="btn-grid-boxes" onclick="toggleBoundingBoxes()" style="padding:2px 7px;font-size:9.5px;">☑ AI Boxes</button>
         <button class="btn-sm" id="btn-grid-expand-wall" onclick="setWorkspaceMode(currentWorkspaceMode==='grid-full'?'grid-map':'grid-full')" style="padding:2px 7px;font-size:9.5px;">⤢ Full Screen</button>
         <button class="btn-sm accent" onclick="setWorkspaceMode('split')" style="padding:2px 7px;font-size:9.5px;" title="Open Full Single-Camera Inspector &amp; 80-Class AI Filter">🎯 Inspector</button>
@@ -915,7 +914,6 @@
         <span style="color:var(--accent-green);font-weight:700;">📹 LIVE FEED SOURCE:</span>
         <div style="display:flex;gap:4px;">
           <button class="btn-sm active" id="btn-src-picam" onclick="setLiveStreamSource('pi_camera')" style="padding:2px 7px;font-size:9.5px;" title="Stream live physical IMX708 camera from Raspberry Pi 5">📹 Live Pi 5 Camera (IMX708)</button>
-          <button class="btn-sm" id="btn-src-video" onclick="setLiveStreamSource('video_file')" style="padding:2px 7px;font-size:9.5px;" title="Stream recorded Finnish CCTV video">🎞️ Recorded Video</button>
         </div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:4px;flex-wrap:wrap;">
@@ -4636,15 +4634,11 @@
         const b = document.getElementById(id);
         if (b) b.classList.toggle('active', src === 'pi_camera');
       });
-      ['btn-src-video', 'btn-grid-src-video'].forEach(id => {
-        const b = document.getElementById(id);
-        if (b) b.classList.toggle('active', src === 'video_file');
-      });
       try {
         await fetch('/api/stream_source', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ source: src })
+          body: JSON.stringify({ source: 'pi_camera' })
         });
       } catch (_) {}
     }

@@ -31,7 +31,7 @@ LIVE_FRAME_STATE = {
     "jpeg": None,
     "updated_at": 0.0,
     "seq": 0,
-    "source": "pi_camera",  # 'pi_camera' (live IMX708 on Pi 5) or 'video_file' (recorded CCTV mp4)
+    "source": "pi_camera",  # 'pi_camera' (live IMX708 on Pi 5)
     "handoff_sim_step": 0,
     "handoff_sim_ts": 0.0,
 }
@@ -1163,7 +1163,7 @@ def make_command_center_handler(alerts_dir, verbose=False, demo_mode=False):
                     raw_body = self.rfile.read(min(length, 65536))
                     payload = json.loads(raw_body.decode("utf-8"))
                     new_src = payload.get("source", "pi_camera")
-                    if new_src not in ("pi_camera", "video_file"):
+                    if new_src != "pi_camera":
                         new_src = "pi_camera"
                     with LIVE_FRAME_LOCK:
                         LIVE_FRAME_STATE["source"] = new_src
