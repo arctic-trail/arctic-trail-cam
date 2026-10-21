@@ -5,6 +5,7 @@
 > * **GitHub Topics:** `raspberry-pi-5` · `rp2350` · `pico-2` · `trail-camera` · `data-diode` · `fiber-optics` · `edge-ai` · `hailo-8l` · `ed25519` · `open-hardware` · `arctic-engineering` · `cots`
 > * **Visual Architecture & Engineering Overview (27-Slide PDF Deck):** [`ARCTIC_TRAIL_CAM_EXECUTIVE_OVERVIEW.pdf`](ARCTIC_TRAIL_CAM_EXECUTIVE_OVERVIEW.pdf)
 > * **Complete Illustrated IKEA-Style Build Manual (PDF Booklet):** [`ARCTIC_TRAIL_CAM_BUILD_AND_FIELD_GUIDE.pdf`](ARCTIC_TRAIL_CAM_BUILD_AND_FIELD_GUIDE.pdf)
+> * **Sister Project (Autonomous Wilderness Search-and-Rescue Drone & Digital Hut Guide):** [`arctic-trail/karhunkierros-sar-drone`](https://github.com/arctic-trail/karhunkierros-sar-drone)
 > * **License:** [`MIT License`](LICENSE)
 
 > [!WARNING]
@@ -107,6 +108,7 @@ Every document in this repository owns **one distinct responsibility** with zero
 | **[`PROJECT_DECISIONS_AND_ROADMAP.md`](PROJECT_DECISIONS_AND_ROADMAP.md)** | **Architecture Trade-Off Decisions (`Decisions 1–9`) & Codebase Audit Log:** Engineering rationale, field vibration-locking rules, and historical defect remediation record. |
 | **[`technical_architecture_engineering_specification.md`](technical_architecture_engineering_specification.md)** | **Wire Protocol & Cryptographic Spec:** Byte-level layout of `DD\x01` telemetry packets, `DD\x02` FEC JPEG chunks, `Ed25519` signatures, and `ChaCha20-Poly1305`. |
 | **[`sky-diode-relay/README.md`](sky-diode-relay/README.md)** | **All-Weather `200 m – 20 km` Troposcatter & Optical Relay (`sky-diode-relay`):** Ordered `Build D` (`2.4 GHz` Troposcatter/Canopy-Bounce), 6-layer anti-jamming FHSS lock-in, `Hamming(8,4)` erasure FEC, and [`DESIGN_EVOLUTION_AND_STABILITY_RECORD.md`](sky-diode-relay/docs/DESIGN_EVOLUTION_AND_STABILITY_RECORD.md). |
+| **[`arctic-trail/karhunkierros-sar-drone`](https://github.com/arctic-trail/karhunkierros-sar-drone)** | **Sister Project — Autonomous Wilderness SAR Drone & "Digital Wilderness Hut" Guidance System:** Reuses 100% of this camera & collector stack as a passive 48h `0.00 W` RF trail post paired with a GNSS-independent `Holybro X500 V2` aerial lantern rescue drone (`~€1,189–€1,329` COTS). |
 
 ---
 
