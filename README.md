@@ -6,7 +6,7 @@
 > * **Visual Architecture & Engineering Overview (27-Slide PDF Deck):** [`ARCTIC_TRAIL_CAM_EXECUTIVE_OVERVIEW.pdf`](ARCTIC_TRAIL_CAM_EXECUTIVE_OVERVIEW.pdf)
 > * **Complete Illustrated IKEA-Style Build Manual (PDF Booklet):** [`ARCTIC_TRAIL_CAM_BUILD_AND_FIELD_GUIDE.pdf`](ARCTIC_TRAIL_CAM_BUILD_AND_FIELD_GUIDE.pdf)
 > * **Sister Project (Autonomous Wilderness Search-and-Rescue Drone, Heated Launch Nest & `FIN-LAB-02` `350–400 km/h` Fast-SAR Jet-Hybrid):** [`arctic-trail/karhunkierros-sar-drone`](https://github.com/arctic-trail/karhunkierros-sar-drone)
-> * **Northern-Flank COTS Gap-Closure Solver (`FIN-SIG-LIB v1.0` `#4`, `[P12-BELT]` Non-RF Fiber-FPV Corridor Belt `#7`, and `FIN-LAB-06` `[P12-USV]` Coastal Cable-Inspection USV `#12`):** [`pi-diode-trailcam/pi5_sender_node/northern_flank_red_gap_solver.py`](pi-diode-trailcam/pi5_sender_node/northern_flank_red_gap_solver.py)
+> * **FIN-LAB COTS Airspace-Safety & Corridor Enabler Suite (`FIN-SIG-LIB v1.0` `#4`, `[P12-BELT]` Non-RF Rotorcraft Corridor & Substation Sensing Belt `#7`, and `FIN-LAB-06` `[P12-USV]` Coastal Cable-Inspection USV `#12`):** [`pi-diode-trailcam/pi5_sender_node/northern_flank_red_gap_solver.py`](pi-diode-trailcam/pi5_sender_node/northern_flank_red_gap_solver.py)
 > * **License:** [`MIT License`](LICENSE)
 
 > [!WARNING]

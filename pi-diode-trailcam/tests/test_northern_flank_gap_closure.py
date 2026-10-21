@@ -26,8 +26,8 @@ class TestNorthernFlankGapClosureInTrailCam(unittest.TestCase):
         self.assertGreaterEqual(sig.decoy_vs_threat_accuracy, 0.95)
         self.assertLessEqual(sig.node_to_c2_latency_s, 2.0)
 
-    def test_02_border_counter_fpv_non_rf_belt(self):
-        """Verify Initiative #7 [P12-BELT] non-RF fiber-FPV corridor belt (Gap J: 1/4 -> 2/4 ceiling)."""
+    def test_02_corridor_non_rf_sensing_belt(self):
+        """Verify Initiative #7 [P12-BELT] non-RF rotorcraft corridor & substation belt (Gap J: 1/4 -> 2/4 ceiling)."""
         fpv = gap_solver.evaluate_border_counter_fpv_belt()
         self.assertGreaterEqual(fpv.corridor_detection_range_m, 500.0)
         self.assertGreaterEqual(fpv.zero_rf_fpv_detection_prob, 0.90)
