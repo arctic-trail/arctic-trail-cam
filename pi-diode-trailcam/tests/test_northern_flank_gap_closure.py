@@ -47,6 +47,10 @@ class TestNorthernFlankGapClosureInTrailCam(unittest.TestCase):
         self.assertAlmostEqual(sc["cots_solved_now_pct"], 72.9, delta=0.2)
         self.assertEqual(sc["red_residual_cots_solved_now"], 14)
         self.assertEqual(sc["areas_at_3plus_now"], 11)
+        apn = gap_solver.simulate_3d_apn_optical_rendezvous_and_soft_capture()
+        self.assertLessEqual(apn.terminal_miss_distance_m, 0.85)
+        self.assertTrue(apn.zero_firearms_zero_pyrotechnics)
+        self.assertTrue(apn.captured_safely_without_lipo_puncture)
 
 
 if __name__ == "__main__":
