@@ -9,6 +9,12 @@
 > * **FIN-LAB COTS Airspace-Safety & Corridor Enabler Suite (`FIN-SIG-LIB v1.0` `#4`, `[P12-BELT]` Non-RF Rotorcraft Corridor & Substation Sensing Belt `#7`, and `FIN-LAB-06` `[P12-USV]` Coastal Cable-Inspection USV `#12`):** [`pi-diode-trailcam/pi5_sender_node/northern_flank_red_gap_solver.py`](pi-diode-trailcam/pi5_sender_node/northern_flank_red_gap_solver.py)
 > * **License:** [`MIT License`](LICENSE)
 
+> **🛠️ PLEASE FORK, BUILD, BREAK & IMPROVE THIS (NO PERMISSION NEEDED)**
+> These repositories are **100% open-source (`MIT License`) public-good engineering** for harsh Nordic & Baltic conditions.
+> * **No ego, no gatekeeping:** You do **not** need to ask permission to fork this, build a module on your kitchen table, use it for a university course/thesis, or spin a commercial product out of it.
+> * **Test logs > theory:** Almost everything here is currently at bench/simulation stage. If you build a €68 acoustic pod, freeze a battery at `-25 °C`, or 3D-print a sub-scale airframe and prove our numbers wrong—**please open a Pull Request or Issue with your real-world data!**
+> * **100% Civilian & Legal to Tinker With:** Everything in these repos (weather/wildlife nodes, optical diodes, airport/corridor acoustic logging, SAR navigation, cooperative own-drone soft-net recovery) is strictly civilian and legal for students, hobbyists, and labs to build and test.
+
 > [!WARNING]
 > **PROTOTYPE DISCLAIMER — ACTIVE DEVELOPMENT & BENCHTOP TESTING IN PROGRESS (`v0.9-beta`)**
 > * **Under Active Development:** This repository is an **experimental proof-of-concept hardware & software engineering prototype** currently undergoing physical benchtop integration and staged validation.
