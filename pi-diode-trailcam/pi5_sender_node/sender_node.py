@@ -143,7 +143,7 @@ signing_key = load_signing_key()
 # Model Configuration (MS-COCO 80-class IDs mapped for Arctic security, motorized vehicles & Nordic wildlife)
 HEF_PATH = os.getenv("HEF_PATH", "/usr/share/hailo-models/yolov8s_h8l.hef")
 ONNX_PATH = os.getenv("ONNX_PATH", "/opt/trailcam/yolov8n.onnx")
-# Full 80-Class MS-COCO Vocabulary (Zero Naive Whitelist — never silently drop weapons, tools, or unexpected objects)
+# Full 80-Class MS-COCO Vocabulary (Zero Naive Whitelist — never silently drop tools, outdoor gear, or unexpected objects)
 COCO_80_CLASSES = {
     0: "person", 1: "bicycle", 2: "car", 3: "motorcycle_atv_snowmobile", 4: "aircraft_drone",
     5: "bus", 6: "train_tracked_vehicle", 7: "truck_tractor", 8: "boat_watercraft", 9: "traffic_light",
@@ -164,11 +164,9 @@ COCO_80_CLASSES = {
 }
 TARGET_CLASSES = COCO_80_CLASSES
 HIGH_PRIORITY_ELONGATED_TOOL_IDS = {43, 76, 34, 25, 38}  # forestry tools, poles, skis, and elongated outdoor gear
-HIGH_PRIORITY_WEAPON_OR_TOOL_IDS = HIGH_PRIORITY_ELONGATED_TOOL_IDS
 HIGH_PRIORITY_AERIAL_IDS = {4, 33}  # aircraft_drone (4) and kite/UAV-rotorcraft lookalike (33)
 CONF_THRESHOLD = float(os.getenv("CONF_THRESHOLD", "0.35"))
-TOOL_CONF_THRESHOLD = float(os.getenv("TOOL_CONF_THRESHOLD", os.getenv("WEAPON_CONF_THRESHOLD", "0.08")))
-WEAPON_CONF_THRESHOLD = TOOL_CONF_THRESHOLD
+TOOL_CONF_THRESHOLD = float(os.getenv("TOOL_CONF_THRESHOLD", "0.08"))
 AERIAL_CONF_THRESHOLD = float(os.getenv("AERIAL_CONF_THRESHOLD", "0.12"))
 CAMO_PERSISTENCE_THRESHOLD = float(os.getenv("CAMO_PERSISTENCE_THRESHOLD", "0.04"))
 

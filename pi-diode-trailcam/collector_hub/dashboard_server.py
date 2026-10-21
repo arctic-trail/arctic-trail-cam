@@ -178,8 +178,8 @@ def build_fleet_grid_payload(alerts_dir, demo_mode=True):
         sim_ts = LIVE_FRAME_STATE.get("handoff_sim_ts", 0.0)
 
     live_active = (lf_meta is not None) and ((now - lf_updated) < 30.0)
-    top_live_class = "PERSON + KNIFE" if demo_mode else "CLEAR"
-    top_live_cat = "weapon" if demo_mode else "everyday"
+    top_live_class = "PERSON + BACKPACK" if demo_mode else "CLEAR"
+    top_live_cat = "tool_gear" if demo_mode else "everyday"
     top_live_conf = 0.94 if demo_mode else 0.0
     if live_active and isinstance(lf_meta, dict):
         dets = [
