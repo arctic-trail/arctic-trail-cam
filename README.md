@@ -112,21 +112,20 @@ Every document in this repository owns **one distinct responsibility** with zero
 
 ---
 
-## 5. Automated Software, Protocol, DRC & Channel Simulation Suites
+## 5. Automated Software, Protocol & Channel Simulation Suites
 
 ![Software Map: Four Modules From Wake Interrupt to Browser Alert](pi-diode-trailcam/docs/images/slide_software_architecture_map.jpg)
 
-*(Note: These automated suites validate software state machines, `Ed25519` cryptography, durable disk persistence, pagination, PCB DRC geometry, and Monte-Carlo channel models in deterministic software simulation; physical hardware acceptance tests are defined in [`FIELD_TESTING_AND_VALIDATION_GUIDE.md`](pi-diode-trailcam/docs/FIELD_TESTING_AND_VALIDATION_GUIDE.md).)*
+*(Note: These automated suites validate software state machines, `Ed25519` cryptography, durable disk persistence, pagination, and Monte-Carlo channel models in deterministic software simulation; physical hardware acceptance tests are defined in [`FIELD_TESTING_AND_VALIDATION_GUIDE.md`](pi-diode-trailcam/docs/FIELD_TESTING_AND_VALIDATION_GUIDE.md).)*
 
 ```bash
 # 1. Run the interactive no-hardware benchtop simulation (generates a signed alert + opens live dashboard):
 python3 pi-diode-trailcam/run_mock_demo.py
 
-# 2. Run all trailcam unit, firmware, hardware DRC, resilience, and quality-assessment regression suites:
+# 2. Run all trailcam unit, firmware, resilience, and quality-assessment regression suites:
 python3 pi-diode-trailcam/tests/test_dual_node_simulation.py
 python3 pi-diode-trailcam/tests/test_pico_firmware_simulation.py
 python3 pi-diode-trailcam/tests/test_enhanced_resilience.py
-python3 pi-diode-trailcam/tests/test_carrier_hardware_drc.py
 python3 pi-diode-trailcam/tests/test_quality_assessment_remediations.py
 
 # 3. Run all 24 sky-diode-relay 20km all-weather troposcatter, anti-jamming, civilian-EU mode, and FEC tests:

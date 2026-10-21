@@ -64,8 +64,6 @@ The proposed optical routing is:
 
 Prove link negotiation and delivery on the short bench configuration before extending the route. The hub application listens on UDP 5514; the example hub address is `10.10.0.100/24`. A direct Cat6 bench connection remains bidirectional hardware.
 
-## Unreleased carrier and optional sky interface
-
-The generated carrier conflicts with earlier connector documentation: J3 is assigned always-on 3.3 V rather than the described switched radar supply, GP6 is not routed as described, and J4's generated order differs from the old harness. **No carrier connector pin order is approved for wiring.** See the [carrier design status](../hardware/CARRIER_BOARD_DESIGN_SPEC.md) and [master decisions and roadmap](../../PROJECT_DECISIONS_AND_ROADMAP.md) for the decision to use COTS modules for V1.
+## Optional sky relay interface
 
 The [`sky-diode-relay` `Build D` (`200 m – 20 km` All-Weather `2.4 GHz` Troposcatter & Canopy-Bounce Relay)](../../sky-diode-relay/hardware/SKY_RELAY_HARDWARE_SPEC_AND_BOM.md) uses a standalone zero-solder `SMA` coaxial and `+5.0V DC` screw-terminal harness (`ADALM-PLUTO` SDR + `Skyworks SE2576L-EK1` `1W` PA + `SKY65405-21EK1` LNA + `Mini-Circuits VBF-2435+` filters + `TDK-Lambda LS50-5` `5V` PSUs; `~35–45 min` assembly) documented in [`SKY_RELAY_HARDWARE_SPEC_AND_BOM.md`](../../sky-diode-relay/hardware/SKY_RELAY_HARDWARE_SPEC_AND_BOM.md#3-exact-coaxial--dc-pinout-schedule-build-d).
