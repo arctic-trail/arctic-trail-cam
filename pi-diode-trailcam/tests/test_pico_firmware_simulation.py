@@ -288,7 +288,19 @@ def test_border_hardening_upgrades():
         7, 1700000000, 250, [{"az_deg": 145.2, "el_deg": 8.5, "az_sigma_deg": 2.5, "f0_hz": 128.0, "fdot_hz_s": 0.5, "snr_db": 14.5}], -25, 38
     )
     assert len(dd03) == 58 and dd03[:3] == b"DD\x03"
-    print("    [+] All 5 Border-Hardening Upgrades + Airspace-Safety DD\\x03 Pod Verified: PASSED")
+
+    # 6. [P11-RF] Passive-RF & EU Direct Remote ID (ASTM F3411-22a) + [P12-BELT] Non-RF Rotorcraft Belt
+    rid_coop = pico_main.parse_passive_remote_id_and_rf_energy(
+        b"RID,UAS=FIN-USPACE-99,LAT=66.150,LON=29.150,ALT=95,SPD=1650,RF_DBM=-58.0,GNSS_J_DB=1.2"
+    )
+    assert rid_coop["rf_class"] == "COOPERATIVE_EU_REMOTE_ID" and rid_coop["remote_id_valid"] is True and rid_coop["tx_power_w"] == 0.0
+    rid_uncoop = pico_main.parse_passive_remote_id_and_rf_energy(b"", rf_burst_dbm=-61.5, gnss_l1_jam_db=1.0)
+    assert rid_uncoop["rf_class"] == "UNCOOPERATIVE_RF_EMITTING_UAV" and rid_uncoop["passive_rf_triggered"] is True
+    rid_jam = pico_main.parse_passive_remote_id_and_rf_energy(b"", rf_burst_dbm=-105.0, gnss_l1_jam_db=11.5)
+    assert rid_jam["rf_class"] == "GNSS_L1_INTERFERENCE_EVENT" and rid_jam["passive_rf_triggered"] is True
+    belt_step = pico_main.evaluate_non_rf_corridor_belt_step()
+    assert belt_step["verified_non_rf_rotorcraft"] is True and belt_step["dd03_frame_len_bytes"] == 58 and belt_step["passive_net_release_ms"] == 120.0
+    print("    [+] All 5 Border-Hardening Upgrades + Airspace-Safety DD\\x03 Pod + [P11-RF] & [P12-BELT] Verified: PASSED")
 
 
 if __name__ == "__main__":

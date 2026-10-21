@@ -20,7 +20,12 @@ import northern_flank_red_gap_solver as gap_solver  # noqa: E402
 
 class TestNorthernFlankGapClosureInTrailCam(unittest.TestCase):
     def test_01_fin_sig_lib_v1_acoustic_and_micro_doppler(self):
-        """Verify Initiative #4 FIN-SIG-LIB v1.0 -30 C 5-class signature library (Gap A: 2/4 -> 3/4)."""
+        """Verify Initiative #4 FIN-SIG-LIB v1.0 -30 C 5-class signature library & 200-sample winter dataset."""
+        ds = gap_solver.generate_fin_sig_lib_v1_winter_dataset(samples_per_class=40, temp_c=-30.0)
+        self.assertEqual(ds["total_samples"], 200)
+        self.assertEqual(len(ds["prototypes"]), 5)
+        self.assertGreaterEqual(ds["overall_5class_accuracy"], 0.95)
+        self.assertGreaterEqual(ds["decoy_vs_threat_accuracy"], 0.95)
         sig = gap_solver.evaluate_nordic_winter_signature_library()
         self.assertAlmostEqual(sig.speed_of_sound_mps, 312.58, delta=0.1)
         self.assertGreaterEqual(sig.decoy_vs_threat_accuracy, 0.95)
@@ -28,6 +33,10 @@ class TestNorthernFlankGapClosureInTrailCam(unittest.TestCase):
 
     def test_02_corridor_non_rf_sensing_belt(self):
         """Verify Initiative #7 [P12-BELT] non-RF rotorcraft corridor & substation belt (Gap J: 1/4 -> 2/4 ceiling)."""
+        sim = gap_solver.simulate_p12_belt_non_rf_rotorcraft_interception()
+        self.assertEqual(sim["target_rf_emissions_w"], 0.0)
+        self.assertGreaterEqual(sim["corridor_detection_range_m"], 550.0)
+        self.assertGreaterEqual(sim["warning_lead_time_at_18_5mps_s"], 28.0)
         fpv = gap_solver.evaluate_border_counter_fpv_belt()
         self.assertGreaterEqual(fpv.corridor_detection_range_m, 500.0)
         self.assertGreaterEqual(fpv.zero_rf_fpv_detection_prob, 0.90)
@@ -35,6 +44,9 @@ class TestNorthernFlankGapClosureInTrailCam(unittest.TestCase):
 
     def test_03_fin_lab_06_coastal_seabed_usv(self):
         """Verify Initiative #12 FIN-LAB-06 [P12-USV] 100% China-free coastal USV (Gap K: 2/4 -> 3/4)."""
+        sim = gap_solver.simulate_finlab06_coastal_cable_usv_mission()
+        self.assertLessEqual(sim["rm3100_cable_tracking_cep_m"], 0.50)
+        self.assertEqual(sim["optical_shore_handoff_rf_w"], 0.0)
         usv = gap_solver.evaluate_finlab06_coastal_usv()
         self.assertGreaterEqual(usv.fleet_availability_pct, 80.0)
         self.assertGreaterEqual(usv.endurance_hours, 30.0)
