@@ -25,21 +25,21 @@ class TestNorthernFlankGapClosureInTrailCam(unittest.TestCase):
         self.assertEqual(ds["total_samples"], 200)
         self.assertEqual(len(ds["prototypes"]), 5)
         self.assertGreaterEqual(ds["overall_5class_accuracy"], 0.95)
-        self.assertGreaterEqual(ds["decoy_vs_threat_accuracy"], 0.95)
+        self.assertGreaterEqual(ds["clutter_vs_aircraft_accuracy"], 0.95)
         sig = gap_solver.evaluate_nordic_winter_signature_library()
         self.assertAlmostEqual(sig.speed_of_sound_mps, 312.58, delta=0.1)
-        self.assertGreaterEqual(sig.decoy_vs_threat_accuracy, 0.95)
+        self.assertGreaterEqual(sig.clutter_vs_aircraft_accuracy, 0.95)
         self.assertLessEqual(sig.node_to_c2_latency_s, 2.0)
 
     def test_02_corridor_non_rf_sensing_belt(self):
         """Verify Initiative #7 [P12-BELT] non-RF rotorcraft corridor & substation belt (Gap J: 1/4 -> 2/4 ceiling)."""
-        sim = gap_solver.simulate_p12_belt_non_rf_rotorcraft_interception()
+        sim = gap_solver.simulate_p12_belt_non_rf_rotorcraft_detection()
         self.assertEqual(sim["target_rf_emissions_w"], 0.0)
         self.assertGreaterEqual(sim["corridor_detection_range_m"], 550.0)
         self.assertGreaterEqual(sim["warning_lead_time_at_18_5mps_s"], 28.0)
-        fpv = gap_solver.evaluate_border_counter_fpv_belt()
+        fpv = gap_solver.evaluate_corridor_non_rf_sensing_belt()
         self.assertGreaterEqual(fpv.corridor_detection_range_m, 500.0)
-        self.assertGreaterEqual(fpv.zero_rf_fpv_detection_prob, 0.90)
+        self.assertGreaterEqual(fpv.zero_rf_rotorcraft_detection_prob, 0.90)
         self.assertLessEqual(fpv.passive_net_trigger_ms, 150.0)
 
     def test_03_fin_lab_06_coastal_seabed_usv(self):
