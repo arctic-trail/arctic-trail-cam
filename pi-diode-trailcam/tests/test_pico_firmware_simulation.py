@@ -274,7 +274,21 @@ def test_border_hardening_upgrades():
     d_n2 = sender_node.compute_aloha_interpass_delays_s("NODE-NORTH-02", shared_trunk=True)
     assert 0.100 <= d_n1[0] <= 0.650 and 0.250 <= d_n1[1] <= 0.850
     assert 0.100 <= d_n2[0] <= 0.650 and 0.250 <= d_n2[1] <= 0.850
-    print("    [+] All 5 Border-Hardening Upgrades Verified: PASSED")
+
+    # 5. Airspace-Safety Pod: Two-Beacon Clock Discipline, ePTFE Vent Icing Self-Test, Traficom Reg 15 & 58-Byte DD\x03 Frame
+    clk = pico_main.compute_disciplined_clock_state(2300.0, 2000.0, 1700.001, 300.0, "RV3032_C7")
+    assert clk["sync_mode"] == "TWO_BEACON_SLOPE_DISCIPLINED" and clk["clock_uncertainty_s"] <= 0.050
+    ice_trig = pico_main.evaluate_acoustic_vent_icing_selftest([70.0, 70.5, 69.8, 61.0], -12.0, 94.0, 0.01)
+    assert ice_trig["vent_status"] == "DEICING_PULSE_ACTIVE" and ice_trig["pulse_heater_s"] == 60
+    ice_cap = pico_main.evaluate_acoustic_vent_icing_selftest([70.0, 70.5, 69.8, 61.0], -12.0, 94.0, 0.078)
+    assert ice_cap["vent_status"] == "DEGRADED_ICING_CAP_EXHAUSTED" and ice_cap["pulse_heater_s"] == 0
+    reg_ok = pico_main.evaluate_traficom_reg15_airtime_admission(10.0, 0.118, "869.4-869.65MHz_500mW_10pct")
+    assert reg_ok["admitted"] is True
+    dd03 = pico_main.build_dd03_airspace_tracklet_frame(
+        7, 1700000000, 250, [{"az_deg": 145.2, "el_deg": 8.5, "az_sigma_deg": 2.5, "f0_hz": 128.0, "fdot_hz_s": 0.5, "snr_db": 14.5}], -25, 38
+    )
+    assert len(dd03) == 58 and dd03[:3] == b"DD\x03"
+    print("    [+] All 5 Border-Hardening Upgrades + Airspace-Safety DD\\x03 Pod Verified: PASSED")
 
 
 if __name__ == "__main__":

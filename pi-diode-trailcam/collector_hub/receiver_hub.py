@@ -420,7 +420,7 @@ def is_valid_fresh_packet(node_id, ts, nonce, strict_clock_skew=True, commit=Tru
 
 
 def process_datagram(pkt, now=None, strict_clock_skew=None):
-    """Processes a single raw UDP datagram (Type 0x01 Metadata or Type 0x02 Image Chunk)."""
+    """Processes a single raw UDP datagram (Type 0x01 Metadata, Type 0x02 Image Chunk, or Type 0x03 58B Airspace Tracklet)."""
     if now is None:
         now = time.time()
     if strict_clock_skew is None:
@@ -431,6 +431,35 @@ def process_datagram(pkt, now=None, strict_clock_skew=None):
         return False
 
     pkt_type = pkt[2]
+
+    # ----------------------------------------------------------------------
+    # Type 0x03: 58-Byte Domain A Airspace-Safety Tracklet Frame (Keyed MAC)
+    # ----------------------------------------------------------------------
+    if pkt_type == 3 and len(pkt) == 58:
+        import hmac
+        body = pkt[:42]
+        rx_mac16 = pkt[42:58]
+        mac_key = os.getenv("USPACE_MAC_KEY", "ARCTIC-CIVILIAN-USPACE-MAC-KEY01").encode("utf-8")
+        expected_mac16 = hmac.new(mac_key, body, hashlib.sha256).digest()[:16]
+        if not hmac.compare_digest(rx_mac16, expected_mac16):
+            return False
+        _, _, node_num, epoch_s, epoch_ms, flags = struct.unpack(">2sBHIHB", body[:12])
+        n_sources = (flags >> 2) & 0x03
+        sources = []
+        for idx in range(n_sources):
+            off = 12 + idx * 9
+            az_u16, el_u8, sig_u8, f0_u16, fdot_i8, snr_u8, _ = struct.unpack(">HBBHbBB", body[off : off + 9])
+            sources.append({
+                "azimuth_deg": round(az_u16 / 100.0, 2),
+                "elevation_deg": round(el_u8 / 2.0, 1),
+                "az_sigma_deg": round(sig_u8 / 4.0, 2),
+                "f0_hz": round(f0_u16 / 10.0, 1),
+                "fdot_hz_per_s": round(fdot_i8 / 10.0, 1),
+                "snr_db": round(snr_u8 / 2.0, 1),
+            })
+        temp_c, wind_noise_db, batt_health = struct.unpack(">bBB", body[39:42])
+        write_receiver_heartbeat(out_dir=OUT_DIR)
+        return True
 
     # ----------------------------------------------------------------------
     # Type 0x01: Signed Metadata Packet (Ed25519)

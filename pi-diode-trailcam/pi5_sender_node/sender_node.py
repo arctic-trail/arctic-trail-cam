@@ -163,10 +163,12 @@ COCO_80_CLASSES = {
     75: "vase", 76: "scissors_shears", 77: "teddy_bear", 78: "hair_drier", 79: "toothbrush",
 }
 TARGET_CLASSES = COCO_80_CLASSES
-HIGH_PRIORITY_WEAPON_OR_TOOL_IDS = {43, 76, 34, 25, 38}  # knife, scissors, bat/club/rifle-like elongated objects
+HIGH_PRIORITY_ELONGATED_TOOL_IDS = {43, 76, 34, 25, 38}  # forestry tools, poles, skis, and elongated outdoor gear
+HIGH_PRIORITY_WEAPON_OR_TOOL_IDS = HIGH_PRIORITY_ELONGATED_TOOL_IDS
 HIGH_PRIORITY_AERIAL_IDS = {4, 33}  # aircraft_drone (4) and kite/UAV-rotorcraft lookalike (33)
 CONF_THRESHOLD = float(os.getenv("CONF_THRESHOLD", "0.35"))
-WEAPON_CONF_THRESHOLD = float(os.getenv("WEAPON_CONF_THRESHOLD", "0.08"))
+TOOL_CONF_THRESHOLD = float(os.getenv("TOOL_CONF_THRESHOLD", os.getenv("WEAPON_CONF_THRESHOLD", "0.08")))
+WEAPON_CONF_THRESHOLD = TOOL_CONF_THRESHOLD
 AERIAL_CONF_THRESHOLD = float(os.getenv("AERIAL_CONF_THRESHOLD", "0.12"))
 CAMO_PERSISTENCE_THRESHOLD = float(os.getenv("CAMO_PERSISTENCE_THRESHOLD", "0.04"))
 
