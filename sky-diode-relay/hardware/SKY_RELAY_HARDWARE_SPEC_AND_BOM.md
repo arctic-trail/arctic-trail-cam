@@ -10,9 +10,11 @@
 >   * **Peacetime License-Exempt Civilian Mode (`--civilian-eu-compliant`, Zero Hardware Changes):** Passing `--civilian-eu-compliant` (`civilian_eu_compliant=True`) in software restricts all FHSS carrier hops strictly inside **`2400.0–2483.5 MHz`** (`2402–2480 MHz`), keeps `Pico 2 GP3 = LOW` (disabling/bypassing the `1.0 W` PA), and sets `ADALM-PLUTO` TX output to `+7.5 dBm` so total radiated power is capped at **`<= +20.0 dBm` (`100 mW` EIRP)** under **Traficom Regulation 15 / EU ETSI EN 300 328**, while `VK7MO`'s `+55.8 dB` coherent processing gain still bridges multi-kilometer NLOS forest paths.
 > * **Optical Reference Architectures (`Builds A, B, and C`):** Retained in Section 4 below for strictly zero-RF (`0.00 W`) optical line-of-sight or clear-weather cloud-bounce research.
 
-![Build D Transmitter: 200 m Setback + 2.4 GHz Directional Launch](../docs/images/sky_diode_beam_system_in_context.jpg)
+![How Sky-Diode-Relay Bounces the 2.4 GHz Signal Over 200 m – 20 km Blocked Terrain](../docs/images/sky_diode_20km_nlos_troposcatter_and_canopy_bounce_v3.jpg)
 
-![Build D Receiver: Filtering, Low-Noise Amplification, Coherent Integration](../docs/images/sky_relay_20km_troposcatter_blueprint.png)
+![True Physical Enclosure Geometry: Vertical 125x80x57 mm Mast RF Shield Box vs Indoor Base Vault](../docs/images/sky_diode_physical_tx_rx_enclosures_v3.jpg)
+
+![Complete 10-SKU Build D Engineering Blueprint & Coaxial Verification Ledger](../docs/images/sky_relay_20km_troposcatter_engineering_blueprint_v2.png)
 
 ---
 

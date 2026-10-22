@@ -80,7 +80,7 @@ A natural question is: *If cabin burglars rarely operate during heavy blizzards 
 3. **10-Item Non-Chinese DigiKey Order Submitted:**
    * Every part is **In Stock**, **100% non-Chinese** (USA, UK, Canada, Japan), and operates on a **single unified `5.0V DC` rail** (`TDK-Lambda LS50-5`, `285-1824-ND`).
 
-![Build D Receiver: Filtering, Low-Noise Amplification, Coherent Integration](images/sky_relay_20km_troposcatter_blueprint.png)
+![True Physical Enclosure Geometry: Vertical 125x80x57 mm Mast RF Shield Box vs Indoor Base Vault](images/sky_diode_physical_tx_rx_enclosures_v3.jpg)
 
 ### B. Three Practical Assembly Details to Keep in Mind When Building (`~35–45 Minutes Total`, Zero Soldering)
 

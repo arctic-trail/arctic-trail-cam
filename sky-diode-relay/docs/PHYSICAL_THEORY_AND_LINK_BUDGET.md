@@ -2,7 +2,7 @@
 
 This document provides the complete mathematical physics model for **`sky-diode-relay`** across both our **Ordered Production Baseline (`Build D`: `200 m – 20 km` All-Weather `2.4 GHz` Troposcatter, Hydrometeor & Canopy-Bounce System)** and our **Optical Reference Models (`Builds A / B / C`)**. Every equation in this document is verified by the 23 automated tests in [`tests/test_sky_relay_simulation.py`](../tests/test_sky_relay_simulation.py).
 
-![200 m – 20 km Troposcatter & Hydrometeor Bounce System in Context](images/sky_diode_beam_system_in_context.jpg)
+![How Sky-Diode-Relay Bounces the 2.4 GHz Signal Over 200 m – 20 km Blocked Terrain](images/sky_diode_20km_nlos_troposcatter_and_canopy_bounce_v3.jpg)
 
 ---
 
