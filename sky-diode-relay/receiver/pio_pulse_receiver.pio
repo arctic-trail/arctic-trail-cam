@@ -1,0 +1,37 @@
+;
+; File: sky-diode-relay/receiver/pio_pulse_receiver.pio
+; Description: RP2040 PIO Time-to-Digital Converter (TDC) for 8-PPM Photon Pulse Capture
+; License: MIT
+;
+; Captures rising edges from the high-speed TIA/comparator front-end (e.g. TLV3501)
+; with 20 ns timestamp resolution (at 100 MHz PIO clock) and programmable post-pulse
+; dead-time holdoff to suppress comparator ringing and PMT/APD afterpulsing.
+;
+.program pio_pulse_receiver
+
+; Initialization (executed once by host before enabling SM):
+;   set x, 0        ; X = 0xFFFFFFFF (via mov x, ~null) free-running down-counter
+;   pull block      ; Load programmable dead-time holdoff count into OSR
+;
+.wrap_target
+sample_loop:
+    jmp pin edge_detected       ; 1 cycle: Check if comparator output pin is HIGH
+    jmp x-- sample_loop         ; 1 cycle: Decrement 32-bit timer X (20 ns per tick @ 100 MHz)
+
+edge_detected:
+    mov isr, ~x                 ; Invert X so host receives monotonic upward tick count
+    push noblock                ; Push 32-bit timestamp word to RX FIFO without stalling timer
+    mov y, osr                  ; Load post-pulse dead-time holdoff count (e.g. 20 ticks = 400 ns)
+
+deadtime_holdoff:
+    jmp x-- deadtime_next       ; 1 cycle: Keep decrementing master timer X during holdoff!
+deadtime_next:
+    jmp y-- deadtime_holdoff    ; 1 cycle: Wait for holdoff window to expire (20 ns per iteration)
+
+wait_low_rearm:
+    jmp pin wait_low_still_high ; 1 cycle: Ensure comparator pin returns LOW before re-arming rising edge
+    jmp x-- sample_loop         ; 1 cycle: Pin is LOW -> decrement X (20 ns tick) and re-arm sample_loop
+wait_low_still_high:
+    jmp x-- wait_low_rearm      ; 1 cycle: Pin still HIGH -> decrement X (20 ns tick) and keep waiting
+.wrap
+
