@@ -64,6 +64,112 @@ class TestNorthernFlankGapClosureInTrailCam(unittest.TestCase):
         self.assertTrue(apn.zero_firearms_zero_pyrotechnics)
         self.assertTrue(apn.captured_safely_without_lipo_puncture)
 
+    def test_05_urban_border_corridor_profile(self):
+        """Verify [P12-URBAN] 65 dBA city/bridge profile with UPS power, 100 Hz comb notch & ESC PWM filtering."""
+        urban = gap_solver.evaluate_urban_border_corridor_profile()
+        self.assertEqual(urban.ambient_traffic_dba, 65.0)
+        self.assertEqual(urban.substation_100hz_hum_dba, 72.0)
+        self.assertEqual(urban.comb_notch_100hz_harmonics_count, 8)
+        self.assertGreaterEqual(urban.comb_notch_attenuation_db, 40.0)
+        self.assertLessEqual(urban.highband_8_16khz_residual_dba, 20.0)
+        self.assertGreaterEqual(urban.blackout_ups_autonomy_hours, 72.0)
+        self.assertEqual(urban.radar_azimuth_baffle_deg, 60.0)
+        self.assertGreaterEqual(urban.radar_parallel_traffic_rejection_pct, 99.0)
+        self.assertGreaterEqual(urban.urban_zero_rf_rotorcraft_range_m, 320.0)
+        self.assertGreaterEqual(urban.urban_detection_prob, 0.90)
+        self.assertTrue(urban.china_free_verified)
+
+    def test_06_finlab06b_offshore_wave_piercing_usv(self):
+        """Verify FIN-LAB-06B [P12-USV-HEAVY] 3.60 m Sea State 5 hydrostatics, Froude & Polar Night DMFC USV."""
+        usv_b = gap_solver.evaluate_finlab06b_offshore_wave_piercing_usv()
+        self.assertEqual(usv_b.hull_length_m, 3.60)
+        self.assertLess(usv_b.froude_number_at_patrol, 0.45)
+        self.assertGreaterEqual(usv_b.metacentric_height_gm_m, 0.25)
+        self.assertLess(usv_b.inverted_metacentric_gm_180deg_m, 0.0)
+        self.assertEqual(usv_b.angle_of_vanishing_stability_deg, 180.0)
+        self.assertEqual(usv_b.max_sea_state, 5)
+        self.assertLessEqual(usv_b.self_righting_180deg_time_s, 4.0)
+        self.assertGreaterEqual(usv_b.polar_night_endurance_hours, 140.0)
+        self.assertGreaterEqual(usv_b.sea_state_5_endurance_hours, 100.0)
+        self.assertLess(usv_b.dmfc_subwaterline_condensate_port_depth_m, -0.15)
+        self.assertGreaterEqual(usv_b.fleet_availability_pct, 90.0)
+        self.assertTrue(usv_b.china_free_verified)
+
+    def test_07_archipelago_2km_optical_strait_bridge(self):
+        """Verify [P11-COAST-2KM] IEC 60825-1 Class 1 eye-safe gimbal-free 1-2 km 1550 nm strait bridge."""
+        bridge = gap_solver.evaluate_archipelago_2km_optical_strait_bridge()
+        self.assertEqual(bridge.rf_emissions_w, 0.0)
+        self.assertEqual(bridge.moving_gimbal_parts, 0)
+        self.assertLessEqual(bridge.exit_irradiance_mw_cm2, 10.0)
+        self.assertTrue(bridge.iec_60825_class1_eye_safe)
+        self.assertLessEqual(bridge.pointing_loss_at_1_5mrad_sway_db, 1.5)
+        self.assertGreaterEqual(bridge.snr_clear_10mbps_at_1km_db, 20.0)
+        self.assertGreaterEqual(bridge.snr_clear_10mbps_at_2km_db, 14.0)
+        self.assertGreaterEqual(bridge.snr_heavy_fog_vk7mo_at_1_5km_db, 12.0)
+        self.assertTrue(bridge.china_free_verified)
+
+    def test_08_svalbard_permafrost_cairn_node(self):
+        """Verify [P21-SVALBARD] treeless permafrost basalt-cairn thermal shell & 120-day Polar Night endurance."""
+        sv = gap_solver.evaluate_svalbard_permafrost_cairn_node()
+        self.assertEqual(sv.outside_air_temp_c, -35.0)
+        self.assertGreaterEqual(sv.internal_vault_temp_c, -18.0)
+        self.assertGreaterEqual(sv.thermal_resistance_k_per_w, 9.5)
+        self.assertGreaterEqual(sv.thermal_time_constant_hours, 72.0)
+        self.assertLessEqual(sv.supercap_cold_crank_droop_v, 0.25)
+        self.assertEqual(sv.polar_night_days, 120)
+        self.assertGreaterEqual(sv.total_battery_endurance_years, 2.0)
+        self.assertEqual(sv.rf_emissions_w, 0.0)
+        self.assertTrue(sv.svalbard_treaty_art9_compliant)
+        self.assertTrue(sv.china_free_verified)
+
+    def test_09_finlab02_ram_drag_and_speed_bounds(self):
+        """Verify FIN-LAB-02 high-speed airframe includes intake ram drag (91.3 N @ 400 km/h, +40.7 N excess)."""
+        f02 = gap_solver.evaluate_finlab02_high_speed_airframe()
+        self.assertAlmostEqual(f02.drag_at_400kmh_n, 91.3, delta=0.5)
+        self.assertAlmostEqual(f02.excess_thrust_at_400kmh_n, 40.7, delta=0.5)
+        self.assertGreaterEqual(f02.max_level_speed_kmh, 450.0)
+        self.assertLess(f02.max_level_speed_kmh, 520.0)
+        self.assertTrue(f02.china_free_verified)
+
+    def test_10_extreme_urban_noise_stress_test(self):
+        """Verify [P12-URBAN] degrades gracefully under extreme 70 dBA bridge traffic & 80 dBA transformer hum."""
+        urban_stress = gap_solver.evaluate_urban_border_corridor_profile(
+            ambient_traffic_dba=70.0,
+            substation_100hz_hum_dba=80.0,
+        )
+        self.assertLessEqual(urban_stress.highband_8_16khz_residual_dba, 25.0)
+        self.assertGreaterEqual(urban_stress.urban_zero_rf_rotorcraft_range_m, 240.0)
+
+    def test_11_optical_bridge_severe_post_sway_stress(self):
+        """Verify [P11-COAST-2KM] maintains >=12 dB SNR at 2 km even under 2.5 mrad gale post deflection."""
+        bridge_gale = gap_solver.evaluate_archipelago_2km_optical_strait_bridge(
+            post_sway_mrad=2.5,
+        )
+        self.assertTrue(bridge_gale.iec_60825_class1_eye_safe)
+        self.assertGreaterEqual(bridge_gale.snr_clear_10mbps_at_2km_db, 12.0)
+
+    def test_12_heated_shelter_and_corridor_geometry(self):
+        """Verify Benchmark H heated shelter & Benchmark I 3-gate head-on geometry."""
+        climber = gap_solver.evaluate_heated_nest_and_fast_climber()
+        geom = gap_solver.compute_corridor_rendezvous_geometry_timeline()
+        self.assertLessEqual(climber.nest_lid_open_s, 10.0)
+        self.assertGreaterEqual(geom.cumulative_id_prob_three_gates, 0.85)
+        self.assertLess(geom.t_gate1_rendezvous_s, geom.t_uncurbed_arrival_s)
+
+    def test_13_100pct_civilian_quick_wins(self):
+        """Verify $24-$55 COTS quick wins closing Narva, Baltic & Svalbard to 100% civilian ceiling."""
+        qw = gap_solver.evaluate_100pct_civilian_quick_wins()
+        self.assertGreaterEqual(qw.narva_laser_dazzle_od_blocking, 6.0)
+        self.assertLessEqual(qw.narva_pio_otdr_fiber_cut_precision_m, 1.5)
+        self.assertEqual(qw.narva_civilian_coverage_pct, 100.0)
+        self.assertGreaterEqual(qw.baltic_hydrophone_diver_anchor_range_m, 500.0)
+        self.assertEqual(qw.baltic_civilian_coverage_pct, 100.0)
+        self.assertGreaterEqual(qw.svalbard_auroral_gradiometer_rejection_db, 40.0)
+        self.assertGreater(qw.svalbard_katabatic_wind_harvester_wh_per_day, qw.svalbard_node_draw_wh_per_day * 50)
+        self.assertEqual(qw.svalbard_civilian_coverage_pct, 100.0)
+        self.assertTrue(qw.all_three_scenarios_100pct_civilian_ceiling)
+        self.assertTrue(qw.china_free_verified)
+
 
 if __name__ == "__main__":
     unittest.main()
