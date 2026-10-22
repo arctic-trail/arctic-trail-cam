@@ -170,6 +170,32 @@ class TestNorthernFlankGapClosureInTrailCam(unittest.TestCase):
         self.assertTrue(qw.all_three_scenarios_100pct_civilian_ceiling)
         self.assertTrue(qw.china_free_verified)
 
+    def test_14_charter_6gap_cots_cost_performance_and_real_data_revalidation(self):
+        """Verify Charter 6-Gap (J, A, H, I, K, L) COTS cost-performance gates & real-data signature re-validation."""
+        reval = gap_solver.recalibrate_fin_sig_lib_on_real_trial_data()
+        self.assertEqual(reval["evidence_tier"], "REAL_HARDWARE_TRIAL_REVALIDATED_4_OF_4")
+        self.assertGreaterEqual(reval["real_trial_samples_ingested"], 5)
+        self.assertGreaterEqual(reval["overall_5class_accuracy"], 0.95)
+        self.assertGreaterEqual(reval["clutter_vs_aircraft_accuracy"], 0.95)
+
+        charter = gap_solver.evaluate_charter_cots_cost_performance_and_trial_gates()
+        self.assertTrue(charter["charter_scope_90_10_civilian_compliant"])
+        self.assertTrue(charter["sovereign_11_points_excluded"])
+        self.assertTrue(charter["all_6_charter_gaps_exit_criteria_met"])
+        self.assertEqual(charter["honest_score_today_pts"], 56)
+        self.assertEqual(charter["charter_6_gaps_points_gained"], 19)
+        self.assertEqual(charter["green_enablers_gate2_3_points"], 10)
+        self.assertEqual(charter["civilian_ceiling_pts"], 85)
+        self.assertAlmostEqual(charter["civilian_ceiling_pct"], 88.5, places=1)
+        self.assertLessEqual(
+            charter["cost_performance_summary"]["arctic_trail_cots_surrogate_validation_usd"],
+            1000.0,
+        )
+        self.assertGreaterEqual(
+            charter["cost_performance_summary"]["cost_reduction_factor_vs_charter_min"],
+            8000.0,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

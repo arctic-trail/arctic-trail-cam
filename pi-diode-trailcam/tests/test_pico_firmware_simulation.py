@@ -300,7 +300,25 @@ def test_border_hardening_upgrades():
     assert rid_jam["rf_class"] == "GNSS_L1_INTERFERENCE_EVENT" and rid_jam["passive_rf_triggered"] is True
     belt_step = pico_main.evaluate_non_rf_corridor_belt_step()
     assert belt_step["verified_non_rf_rotorcraft"] is True and belt_step["dd03_frame_len_bytes"] == 58 and belt_step["passive_net_release_ms"] == 120.0
-    print("    [+] All 5 Border-Hardening Upgrades + Airspace-Safety DD\\x03 Pod + [P11-RF] & [P12-BELT] Verified: PASSED")
+
+    # 7. Gap L Allied Sensor Auto-Detection: Swedish Acconeer XM125 (0x52) & USA Garmin LIDAR-Lite v4 LED (0x62)
+    orig_scan = pico_main.i2c.scan
+    orig_readfrom = pico_main.i2c.readfrom_mem
+    try:
+        pico_main.i2c.scan = lambda: [0x1C, 0x52, 0x62]  # STMicro LIS3MDL (0x1C), Acconeer XM125 (0x52), Garmin LIDAR v4 (0x62)
+        pico_main.i2c.readfrom_mem = lambda addr, reg, n: struct.pack("<Hh", 4250, -1850) if (addr == 0x52 and n == 4) else orig_readfrom(addr, reg, n)
+        assert pico_main.init_sensors() is True
+        assert pico_main.sensor_health["mag"] is True and pico_main.active_qmc_addr == 0x1C
+        assert pico_main.sensor_health["xm125"] is True
+        assert pico_main.sensor_health["garmin_lidar"] is True
+        xm_dist, xm_spd = pico_main.read_xm125_radar_i2c()
+        assert xm_dist == 4250 and xm_spd == -1850
+    finally:
+        pico_main.i2c.scan = orig_scan
+        pico_main.i2c.readfrom_mem = orig_readfrom
+        pico_main.init_sensors()
+
+    print("    [+] All 5 Border-Hardening Upgrades + Airspace-Safety DD\\x03 Pod + [P11-RF]/[P12-BELT] + XM125/Garmin Allied Auto-Detect: PASSED")
 
 
 if __name__ == "__main__":

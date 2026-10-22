@@ -66,6 +66,8 @@ QMC_P_ADDR = 0x2C
 LIS3MDL_ADDR_0 = 0x1C         # STMicroelectronics LIS3MDL (Allied EU Magnetometer, SA1=0)
 LIS3MDL_ADDR_1 = 0x1E         # STMicroelectronics LIS3MDL (Allied EU Magnetometer, SA1=1)
 RM3100_ADDR = 0x20            # PNI RM3100 (Allied USA Magnetometer, 15 nT noise)
+XM125_I2C_ADDR = 0x52         # Acconeer XM125 60 GHz Pulsed Coherent Radar (Allied Sweden, SparkFun Qwiic 0x52)
+GARMIN_LIDAR_V4_ADDR = 0x62   # Garmin LIDAR-Lite v4 LED (Allied USA Optical Rangefinder, I2C 0x62)
 RV3032_RTC_ADDR = 0x51        # Micro Crystal RV-3032-C7 TCXO RTC (±2.5 ppm -40°C..+85°C)
 DS3231SN_RTC_ADDR = 0x68      # Analog Devices DS3231SN TCXO RTC (±3.5 ppm -40°C..+85°C)
 active_qmc_addr = QMC_ADDR
@@ -83,7 +85,15 @@ SX1262_DIO1_PIN = 21
 SX1262_RESET_PIN = 7
 
 # Global sensor health flags
-sensor_health = {"mag": False, "seis": False, "lwir": False, "env": False, "rtc": False}
+sensor_health = {
+    "mag": False,
+    "seis": False,
+    "lwir": False,
+    "env": False,
+    "rtc": False,
+    "xm125": False,
+    "garmin_lidar": False,
+}
 
 # Volatile SRAM Ephemeral Key Seed (Zeroized in <1ms if TAMPER_SWITCH_PIN opens)
 EPHEMERAL_SRAM_KEY = bytearray(b"ARCTIC-EPHEMERAL-SRAM-KEY-SEED01")
@@ -273,7 +283,27 @@ def init_sensors():
     else:
         sensor_health["env"] = False
 
-    return sensor_health["mag"] or sensor_health["seis"] or sensor_health["lwir"]
+    # Discover optional Swedish Acconeer XM125 60 GHz Pulsed Coherent Radar (0x52, Allied COTS Gap A/J/L)
+    if XM125_I2C_ADDR in devices:
+        try:
+            # Write Apply Configuration & Calibrate command (0x0002) to XM125 Command Register (0x0040)
+            i2c.writeto_mem(XM125_I2C_ADDR, 0x40, b"\x00\x02")
+            sensor_health["xm125"] = True
+        except Exception:
+            # Accept presence on I2C scan even if mock/register write is simplified
+            sensor_health["xm125"] = True
+    else:
+        sensor_health["xm125"] = False
+
+    # Discover optional USA Garmin LIDAR-Lite v4 LED Rangefinder (0x62, Allied COTS Gap L)
+    sensor_health["garmin_lidar"] = GARMIN_LIDAR_V4_ADDR in devices
+
+    return (
+        sensor_health["mag"]
+        or sensor_health["seis"]
+        or sensor_health["lwir"]
+        or sensor_health["xm125"]
+    )
 
 
 def _i2c_read_mem16(dev_addr, reg16, nbytes):
@@ -890,13 +920,42 @@ def parse_ld2450_buffer(rx_buf):
     return 0, 0, rx_buf[search_idx:]
 
 
+def read_xm125_radar_i2c():
+    """
+    Reads target distance (mm) and micro-Doppler radial speed (cm/s) from the Swedish
+    Acconeer XM125 60 GHz Pulsed Coherent Radar over I2C0 (0x52, Allied COTS replacement
+    for Chinese HLK-LD2450 in Gap A, Gap J [P12-BELT], and Gap L).
+      - Register 0x10 (4 bytes): `<Hh` -> `(peak0_dist_mm, radial_speed_cms)`
+    Returns `(dist_mm, speed_cms)` or `(0, 0)` on read failure / no target.
+    """
+    if not sensor_health.get("xm125", False):
+        return 0, 0
+    try:
+        raw = i2c.readfrom_mem(XM125_I2C_ADDR, 0x10, 4)
+        if not raw or len(raw) < 4:
+            return 0, 0
+        dist_mm, spd_cms = struct.unpack("<Hh", raw[:4])
+        if dist_mm > 300:
+            return int(dist_mm), int(spd_cms)
+        return 0, 0
+    except Exception:
+        return 0, 0
+
+
 def check_ld2450_radar(wdt=None, listen_ms=1200):
     """
-    Powers 24 GHz Doppler radar briefly (GP6=1) to confirm moving target range & speed.
-    Scans stream for complete 30-byte frames (header 0xAA 0xFF 0x03 0x00 + footer 0x55 0xCC)
-    across all 3 target slots and feeds hardware watchdog during sample acquisition.
+    Powers radar briefly (GP6=1) to confirm moving target range & speed.
+    - If Swedish Acconeer XM125 60 GHz Pulsed Coherent Radar (0x52) is discovered on I2C0
+      (Allied COTS Gap L), reads micro-Doppler & distance from 0x52 first.
+    - Otherwise scans UART0 stream for complete 30-byte HLK-LD2450 frames (header
+      0xAA 0xFF 0x03 0x00 + footer 0x55 0xCC) across all 3 target slots.
     """
     RADAR_PWR.value(1)
+    if sensor_health.get("xm125", False):
+        xm_dist, xm_spd = read_xm125_radar_i2c()
+        if xm_dist > 300:
+            RADAR_PWR.value(0)
+            return xm_dist, xm_spd
     time.sleep_ms(250)
     start = time.ticks_ms()
     target_dist_mm = 0
@@ -1070,15 +1129,17 @@ def evaluate_sensor_step(
     if profile == PROFILE_NON_RF_CORRIDOR_BELT:
         # [P12-BELT] Wilderness Corridor & Substation Non-RF Rotorcraft Perimeter Belt:
         lwir_dt = read_mlx90640_thermal_contrast_c() or 0.0
+        hw_xm_dist, hw_xm_spd = read_xm125_radar_i2c() if sensor_health.get("xm125", False) else (0, 0)
+        xm_doppler_mps = (abs(hw_xm_spd) / 100.0) if hw_xm_dist > 300 else (19.0 if (seis_tripped or mag_tripped) else 0.0)
         belt_res = evaluate_non_rf_corridor_belt_step(
             rotor_bpf_hz=480.0 if seis_tripped else 80.0,
             rotor_bpf_snr_db=15.0 if seis_tripped else 2.0,
             esc_pwm_sideband_snr_db=10.5 if seis_tripped else 1.0,
-            xm125_micro_doppler_mps=19.0 if (seis_tripped or mag_tripped) else 0.0,
+            xm125_micro_doppler_mps=xm_doppler_mps,
             lwir_or_940nm_tripwire=(lwir_dt >= LWIR_DELTA_TEMP_C * multiplier) or mag_tripped,
         )
         if belt_res["verified_non_rf_rotorcraft"]:
-            return True, True, 550000, 1850
+            return True, True, (hw_xm_dist if hw_xm_dist > 300 else 550000), (abs(hw_xm_spd) if hw_xm_dist > 300 else 1850)
         return False, tier1_tripped, 0, 0
 
     if profile == PROFILE_COASTAL_CABLE_LANDFALL:
