@@ -118,9 +118,7 @@ def flash_pico_without_macos_metadata(uf2_path=None, bootsel_vol=None):
             )
         purge_macos_metadata(bootsel_vol)
 
-    picotool_bin = shutil.which("picotool") or (
-        "/opt/homebrew/bin/picotool" if os.path.isfile("/opt/homebrew/bin/picotool") else None
-    )
+    picotool_bin = shutil.which("picotool")
     if picotool_bin:
         print(f"  [*] Flashing {os.path.basename(uf2_path)} directly over raw USB via picotool (zero macOS metadata)...")
         proc = subprocess.run(
