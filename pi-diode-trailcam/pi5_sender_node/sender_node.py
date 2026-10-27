@@ -10,17 +10,20 @@ import socket
 import struct
 import hashlib
 import secrets
+import math
 import subprocess
 try:
     import serial
 except ImportError:
     serial = None
 try:
-    import cv2
     import numpy as np
 except ImportError:
-    cv2 = None
     np = None
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 from nacl.signing import SigningKey
 
 # ==============================================================================
@@ -198,6 +201,227 @@ def classify_aerial_target_subtype(scores_row):
     if s_plane >= 0.55 and s_kite < 0.02 and s_frisbee < 0.02 and s_umb < 0.02:
         return "airplane", round(s_plane, 3)
     return "aircraft_drone", round(max(s_plane, fused), 3)
+
+
+def capture_tc001_lwir_usb_frame(device_paths=("/dev/video2", "/dev/video4", "/dev/video6")):
+    """
+    Probes for an attached USB V4L2 8-14 um LWIR thermal camera (`TOPDON TC001` 256x192 / 256x384
+    YUYV dual-plane stream `[D11]`). Returns `(thermal_celsius_2d, display_bgr_frame)` when hardware
+    is attached, or `(None, None)` if no USB LWIR module is plugged in.
+    """
+    if cv2 is None or np is None:
+        return None, None
+    for dev in device_paths:
+        if not os.path.exists(dev):
+            continue
+        cap = None
+        try:
+            cap = cv2.VideoCapture(dev, cv2.CAP_V4L2)
+            if not cap.isOpened():
+                continue
+            ok, raw = cap.read()
+            if not ok or raw is None or raw.size == 0:
+                continue
+            h, w = raw.shape[:2]
+            # TOPDON TC001 outputs 256x384 (top 256x192 visual + bottom 256x192 16-bit Kelvin/64 radiometric)
+            if h >= 384 and w == 256:
+                vis_half = raw[:192, :256]
+                therm_half = raw[192:384, :256]
+                if therm_half.ndim == 3 and therm_half.shape[2] >= 2:
+                    u16 = (therm_half[:, :, 1].astype(np.uint16) << 8) | therm_half[:, :, 0].astype(np.uint16)
+                    temp_c = (u16.astype(np.float32) / 64.0) - 273.15
+                else:
+                    gray = cv2.cvtColor(vis_half, cv2.COLOR_BGR2GRAY) if vis_half.ndim == 3 else vis_half
+                    temp_c = -10.0 + (gray.astype(np.float32) / 255.0) * 180.0
+                disp_bgr = vis_half if vis_half.ndim == 3 else cv2.cvtColor(vis_half, cv2.COLOR_GRAY2BGR)
+                return temp_c, disp_bgr
+            gray = cv2.cvtColor(raw, cv2.COLOR_BGR2GRAY) if raw.ndim == 3 else raw
+            temp_c = -10.0 + (gray.astype(np.float32) / 255.0) * 180.0
+            disp_bgr = raw if raw.ndim == 3 else cv2.cvtColor(raw, cv2.COLOR_GRAY2BGR)
+            return temp_c, disp_bgr
+        except Exception:
+            pass
+        finally:
+            if cap is not None:
+                try:
+                    cap.release()
+                except Exception:
+                    pass
+    return None, None
+
+
+def _extract_mask_boxes_xywh(binary_mask_u8, min_area_px=4):
+    """
+    Extracts (x, y, w, h) bounding boxes from a binary mask using cv2.findContours
+    or a pure-NumPy 1D row/col run-length connected-region splitter when cv2 is absent.
+    """
+    if cv2 is not None:
+        cnts, _ = cv2.findContours(binary_mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        boxes = []
+        for c in cnts:
+            if cv2.contourArea(c) >= min_area_px:
+                boxes.append(cv2.boundingRect(c))
+        return boxes
+    if np is None:
+        return []
+    mask_bool = np.asarray(binary_mask_u8) > 0
+    if int(np.count_nonzero(mask_bool)) < min_area_px:
+        return []
+    # Split vertically separated active row bands first, then horizontally separated column bands
+    active_rows = np.where(np.any(mask_bool, axis=1))[0]
+    row_splits = np.where(np.diff(active_rows) > 2)[0] + 1
+    row_groups = np.split(active_rows, row_splits)
+    boxes = []
+    for rg in row_groups:
+        if rg.size == 0:
+            continue
+        y1, y2 = int(rg[0]), int(rg[-1])
+        sub = mask_bool[y1:y2 + 1, :]
+        active_cols = np.where(np.any(sub, axis=0))[0]
+        if active_cols.size == 0:
+            continue
+        col_splits = np.where(np.diff(active_cols) > 2)[0] + 1
+        for cg in np.split(active_cols, col_splits):
+            if cg.size == 0:
+                continue
+            x1, x2 = int(cg[0]), int(cg[-1])
+            area = int(np.count_nonzero(mask_bool[y1:y2 + 1, x1:x2 + 1]))
+            if area >= min_area_px:
+                boxes.append((x1, y1, max(1, x2 - x1 + 1), max(1, y2 - y1 + 1)))
+    return boxes
+
+
+def detect_smoke_obscuration_and_fuse_tc001_lwir(
+    eo_frame,
+    existing_detections=None,
+    simulated_lwir_temp_c_map=None,
+    soot_mass_conc_g_m3=1.8,
+    path_length_m=200.0,
+):
+    """
+    Dual-Band IMX708 (0.4-1.0 um EO/NoIR) + TOPDON TC001 (8-14 um LWIR [D11]) Through-Smoke Fusion:
+      - Dense hydrocarbon/wildfire/industrial soot plumes (particle diameter D_p ~ 0.1-1.5 um,
+        mass concentration M_c ~ 1.0-2.5 g/m^3) sit in the Mie scattering peak for 0.55-0.85 um
+        Visible/NoIR light (size parameter x = pi * D_p / lambda ~ 1.5-7.0, specific extinction
+        sigma_ext(0.55 um) ~ 8.5 m^2/g -> <6%-18% transmission over 150-200 m).
+      - In the 8-14 um LWIR window (`TOPDON TC001` 256x192 VOx microbolometer), sub-micron soot
+        particles are deeply in the Rayleigh small-particle regime (x ~ 0.03-0.35 << 1,
+        sigma_ext(10 um) ~ 0.38 m^2/g -> 85%-92% transmission over 150-200 m, e.g., 87.17% at
+        M_c = 1.8 g/m^3 over 200 m).
+      - Evaluates `eo_frame` for Mie smoke/fog contrast collapse (RMS contrast <= 22.0, mean edge
+        gradient <= 8.0, and no high-confidence EO lock >= 0.70), probes `TOPDON TC001`
+        (`simulated_lwir_temp_c_map` or live USB V4L2), and extracts radiometric thermal boxes:
+        * `turbine_exhaust_hotspot` (T_peak >= 120.0 deg C: rotorcraft/turboshaft exhaust or engine core)
+        * `thermal_person_vehicle` (delta_T >= +6.0 deg C above scene median background)
+    """
+    dets = list(existing_detections) if existing_detections else []
+    if eo_frame is None or np is None or getattr(eo_frame, "size", 0) == 0:
+        eo_rms_contrast = 0.0
+        eo_mean_luma = 0.0
+        eo_mean_gradient = 0.0
+    else:
+        if eo_frame.ndim == 3:
+            gray_eo = cv2.cvtColor(eo_frame, cv2.COLOR_BGR2GRAY) if cv2 is not None else np.mean(eo_frame, axis=2)
+        else:
+            gray_eo = eo_frame
+        gray_f = np.asarray(gray_eo, dtype=np.float32)
+        eo_rms_contrast = float(np.std(gray_f))
+        eo_mean_luma = float(np.mean(gray_f))
+        if gray_f.shape[0] > 2 and gray_f.shape[1] > 2:
+            gx = np.abs(np.diff(gray_f, axis=1))
+            gy = np.abs(np.diff(gray_f, axis=0))
+            eo_mean_gradient = float(0.5 * (np.mean(gx) + np.mean(gy)))
+        else:
+            eo_mean_gradient = 0.0
+
+    # Beer-Lambert optical vs LWIR transmission through hydrocarbon soot (D_p ~ 0.4 um)
+    sigma_ext_vis_m2_g = 8.50
+    sigma_ext_lwir_m2_g = 0.3818
+    tau_vis = sigma_ext_vis_m2_g * float(soot_mass_conc_g_m3) * (float(path_length_m) / 1000.0)
+    tau_lwir = sigma_ext_lwir_m2_g * float(soot_mass_conc_g_m3) * (float(path_length_m) / 1000.0)
+    vis_transmission_pct = round(100.0 * math.exp(-tau_vis), 2)
+    lwir_transmission_pct = round(100.0 * math.exp(-tau_lwir), 2)
+
+    has_sharp_eo_lock = any(
+        isinstance(d, dict)
+        and d.get("source") != "tc001_lwir_8_14um"
+        and float(d.get("conf", 0.0)) >= 0.70
+        for d in dets
+    )
+    smoke_obscured = (
+        (eo_rms_contrast <= 22.0)
+        and (eo_mean_gradient <= 8.0)
+        and (20.0 <= eo_mean_luma <= 165.0)
+        and (not has_sharp_eo_lock)
+    )
+
+    lwir_map = simulated_lwir_temp_c_map
+    if lwir_map is None:
+        lwir_map, _ = capture_tc001_lwir_usb_frame()
+
+    lwir_hotspots = []
+    lwir_active = (np is not None) and (lwir_map is not None) and (getattr(lwir_map, "size", 0) > 0)
+    if lwir_active:
+        t_arr = np.asarray(lwir_map, dtype=np.float32)
+        th, tw = t_arr.shape[:2]
+        bg_median_c = float(np.median(t_arr))
+        peak_c = float(np.max(t_arr))
+
+        # 1. High-temperature turbine/exhaust hotspot (>= 120 deg C)
+        exhaust_mask = (t_arr >= 120.0).astype(np.uint8) * 255
+        for x, y, w_box, h_box in _extract_mask_boxes_xywh(exhaust_mask, min_area_px=4):
+            roi_max_c = float(np.max(t_arr[y:y + h_box, x:x + w_box]))
+            box_norm = [
+                round(x / float(tw), 3),
+                round(y / float(th), 3),
+                round((x + w_box) / float(tw), 3),
+                round((y + h_box) / float(th), 3),
+            ]
+            item = {
+                "class": "turbine_exhaust_hotspot",
+                "conf": round(min(0.99, 0.75 + (roi_max_c - 120.0) / 1200.0), 2),
+                "box": box_norm,
+                "source": "tc001_lwir_8_14um",
+                "peak_temp_c": round(roi_max_c, 1),
+            }
+            lwir_hotspots.append(item)
+            dets.append(item)
+
+        # 2. Warm human/vehicle thermal anomaly (+6 C to +95 C above background, below 120 C)
+        warm_mask = ((t_arr >= (bg_median_c + 6.0)) & (t_arr < 120.0)).astype(np.uint8) * 255
+        for x, y, w_box, h_box in _extract_mask_boxes_xywh(warm_mask, min_area_px=6):
+            roi_max_c = float(np.max(t_arr[y:y + h_box, x:x + w_box]))
+            box_norm = [
+                round(x / float(tw), 3),
+                round(y / float(th), 3),
+                round((x + w_box) / float(tw), 3),
+                round((y + h_box) / float(th), 3),
+            ]
+            item = {
+                "class": "thermal_person_vehicle",
+                "conf": round(min(0.96, 0.65 + (roi_max_c - bg_median_c) / 80.0), 2),
+                "box": box_norm,
+                "source": "tc001_lwir_8_14um",
+                "peak_temp_c": round(roi_max_c, 1),
+            }
+            lwir_hotspots.append(item)
+            dets.append(item)
+    else:
+        bg_median_c = 0.0
+        peak_c = 0.0
+
+    return {
+        "smoke_or_fog_obscured": bool(smoke_obscured),
+        "eo_rms_contrast": round(eo_rms_contrast, 2),
+        "eo_mean_luma": round(eo_mean_luma, 2),
+        "vis_055um_transmission_pct": vis_transmission_pct,
+        "lwir_10um_transmission_pct": lwir_transmission_pct,
+        "tc001_lwir_sensor_active": bool(lwir_active),
+        "lwir_bg_median_c": round(bg_median_c, 1),
+        "lwir_peak_temp_c": round(peak_c, 1),
+        "lwir_hotspots_detected": len(lwir_hotspots),
+        "fused_detections": dets,
+    }
 
 
 def letterbox_image(frame, new_shape=640):
@@ -1061,6 +1285,12 @@ def main():
         # Ensure 1000BASE-T / optical carrier has completed auto-negotiation before firing UDP burst
         wait_for_ethernet_carrier(iface=iface, timeout_s=3.0)
 
+        # Evaluate hydrocarbon/wildfire smoke obscuration & fuse optional USB TOPDON TC001 8-14 um LWIR hotspots
+        lwir_smoke_meta = detect_smoke_obscuration_and_fuse_tc001_lwir(
+            main_frame, existing_detections=detections_found
+        )
+        detections_found = lwir_smoke_meta["fused_detections"]
+
         # Construct and fire alert payload over optical diode
         subject_kinematics = estimate_subject_kinematics(
             detections_found, pico_telemetry, captured_pairs=captured_pairs
@@ -1072,6 +1302,14 @@ def main():
             "pico_trig": pico_telemetry,
             "detections": detections_found,
             "subject_kinematics": subject_kinematics,
+            "lwir_smoke_fusion": {
+                "smoke_or_fog_obscured": lwir_smoke_meta["smoke_or_fog_obscured"],
+                "eo_rms_contrast": lwir_smoke_meta["eo_rms_contrast"],
+                "vis_055um_transmission_pct": lwir_smoke_meta["vis_055um_transmission_pct"],
+                "lwir_10um_transmission_pct": lwir_smoke_meta["lwir_10um_transmission_pct"],
+                "tc001_lwir_sensor_active": lwir_smoke_meta["tc001_lwir_sensor_active"],
+                "lwir_hotspots_detected": lwir_smoke_meta["lwir_hotspots_detected"],
+            },
             "hailo_active": hailo_available,
             "camera_ok": camera_ok,
             "inference_backend": inference_backend,

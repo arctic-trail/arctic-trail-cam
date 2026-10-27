@@ -13,3 +13,7 @@ __pycache__/
 *~
 .vscode/
 .idea/
+
+# Ignore large local model weights
+collector_hub/models/
+

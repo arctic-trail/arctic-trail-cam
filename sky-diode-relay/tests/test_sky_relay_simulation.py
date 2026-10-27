@@ -54,6 +54,8 @@ from sky_receiver import (
     evaluate_link_health_diagnostics,
     simulate_vk7mo_scatter_channel,
     demodulate_vk7mo_lockin_stream,
+    evaluate_passive_bistatic_rotor_micro_doppler,
+    PlutoSDRReceiver,
 )
 
 
@@ -996,6 +998,46 @@ def test_civilian_eu_compliant_mode_and_link_budget():
     print("    [+] Peacetime Civilian EU/Traficom Mode (--civilian-eu-compliant): PASSED")
 
 
+def test_passive_bistatic_dvbt2_rotor_micro_doppler_verifier():
+    print("[*] 25. Validating 0.000 W Passive Bistatic UHF (538 MHz DVB-T2) Rotor Blade-Tip Micro-Doppler Verifier...")
+    rx_sdr = PlutoSDRReceiver(simulate_if_missing=True)
+
+    # 1. Real heavy rotorcraft (V_tip = 215 m/s, f_c = 538 MHz, beta = 35 deg -> +-736.0 Hz blade-tip flashes)
+    real_rotor = rx_sdr.verify_bistatic_rotor_micro_doppler(
+        illuminator_freq_mhz=538.0,
+        blade_tip_speed_mps=215.0,
+        bistatic_angle_deg=35.0,
+        rotor_disk_rcs_m2=15.0,
+        measured_doppler_spread_hz=736.0,
+        measured_sideband_snr_db=14.5,
+        acoustic_bpf_hz=31.2,
+    )
+    assert real_rotor["tx_power_w"] == 0.0
+    assert abs(real_rotor["expected_blade_tip_doppler_hz"] - 736.0) < 1.5
+    assert real_rotor["physical_rotor_disk_verified"] is True
+    assert real_rotor["acoustic_speaker_decoy_flagged"] is False
+
+    # 2. Acoustic speaker decoy drone (broadcasting 31.2 Hz rotor audio, 0.0 m^2 heavy rotor disk RCS)
+    speaker_decoy = rx_sdr.verify_bistatic_rotor_micro_doppler(
+        illuminator_freq_mhz=538.0,
+        blade_tip_speed_mps=215.0,
+        bistatic_angle_deg=35.0,
+        rotor_disk_rcs_m2=0.0,
+        measured_doppler_spread_hz=12.0,
+        measured_sideband_snr_db=1.2,
+        acoustic_bpf_hz=31.2,
+    )
+    assert speaker_decoy["tx_power_w"] == 0.0
+    assert speaker_decoy["physical_rotor_disk_verified"] is False
+    assert speaker_decoy["acoustic_speaker_decoy_flagged"] is True
+
+    print(
+        f"    - Passive DVB-T2 (538.0 MHz, lambda={real_rotor['wavelength_m']} m, TX={real_rotor['tx_power_w']} W): "
+        f"Blade-Tip Doppler = +-{real_rotor['expected_blade_tip_doppler_hz']} Hz | Decoy Flagged = {speaker_decoy['acoustic_speaker_decoy_flagged']}"
+    )
+    print("    [+] 0.000 W Passive Bistatic UHF Rotor Blade-Tip Micro-Doppler Verifier: PASSED")
+
+
 if __name__ == "__main__":
     print("==================================================")
     print("SKY-DIODE-RELAY OPTICAL PROPAGATION TEST SUITE")
@@ -1024,7 +1066,8 @@ if __name__ == "__main__":
     test_simultaneous_cfo_jammer_and_rayleigh_multipath_fade()
     test_broadband_barrage_and_pulsed_chirp_jammer_immunity()
     test_civilian_eu_compliant_mode_and_link_budget()
-    print("\n[ALL 24 SKY RELAY SIMULATION & FINNISH CLIMATE TESTS PASSED SUCCESSFULLY!]")
+    test_passive_bistatic_dvbt2_rotor_micro_doppler_verifier()
+    print("\n[ALL 25 SKY RELAY SIMULATION & FINNISH CLIMATE TESTS PASSED SUCCESSFULLY!]")
 
 
 

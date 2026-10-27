@@ -17,3 +17,4 @@ __pycache__/
 verified_alerts/
 demo_verified_output/
 pi-diode-trailcam/tests/verified_dual_alerts/
+pi-diode-trailcam/collector_hub/models/

@@ -282,12 +282,53 @@ def test_border_hardening_upgrades():
     assert ice_trig["vent_status"] == "DEICING_PULSE_ACTIVE" and ice_trig["pulse_heater_s"] == 60
     ice_cap = pico_main.evaluate_acoustic_vent_icing_selftest([70.0, 70.5, 69.8, 61.0], -12.0, 94.0, 0.078)
     assert ice_cap["vent_status"] == "DEGRADED_ICING_CAP_EXHAUSTED" and ice_cap["pulse_heater_s"] == 0
-    reg_ok = pico_main.evaluate_traficom_reg15_airtime_admission(10.0, 0.118, "869.4-869.65MHz_500mW_10pct")
-    assert reg_ok["admitted"] is True
+    toa_sf7 = pico_main.compute_sx1262_lora_toa_s(payload_bytes=58, sf=7, bw_hz=125000, cr=1, preamble_symbols=13)
+    toa_sf9 = pico_main.compute_sx1262_lora_toa_s(payload_bytes=58, sf=9, bw_hz=125000, cr=1, preamble_symbols=8)
+    assert abs(toa_sf7 - 0.118016) < 1e-6, f"Expected 0.118016 s at SF7/BW125, got {toa_sf7}"
+    assert abs(toa_sf9 - 0.369664) < 1e-6, f"Expected 0.369664 s at SF9/BW125, got {toa_sf9}"
+    reg_ok = pico_main.evaluate_traficom_reg15_airtime_admission(10.0, toa_sf9, "869.4-869.65MHz_500mW_10pct", epoch_period_s=15.0, lora_sf=9, lora_bw_hz=125000)
+    assert reg_ok["admitted"] is True and reg_ok["steady_duty_cycle_pct"] <= 10.0
+    reg_1pct_ok = pico_main.evaluate_traficom_reg15_airtime_admission(10.0, toa_sf7, "868.0-868.6MHz_25mW_1pct", epoch_period_s=15.0, lora_sf=7, lora_bw_hz=125000)
+    assert reg_1pct_ok["admitted"] is True and reg_1pct_ok["steady_duty_cycle_pct"] <= 1.0
+    reg_1pct_over = pico_main.evaluate_traficom_reg15_airtime_admission(10.0, toa_sf7, "868.0-868.6MHz_25mW_1pct", epoch_period_s=10.0, lora_sf=7, lora_bw_hz=125000)
+    assert reg_1pct_over["admitted"] is False and reg_1pct_over["steady_duty_cycle_pct"] > 1.0
+    reg_sf10_dyn = pico_main.evaluate_traficom_reg15_airtime_admission(10.0, 0.0, "869.4-869.65MHz_500mW_10pct", epoch_period_s=15.0, lora_sf=10, lora_bw_hz=125000, tx_erp_mw=450.0)
+    assert reg_sf10_dyn["admitted"] is True and reg_sf10_dyn["frame_airtime_s"] > 0.60 and reg_sf10_dyn["erp_compliant"] is True
+    reg_erp_over = pico_main.evaluate_traficom_reg15_airtime_admission(10.0, 0.0, "868.0-868.6MHz_25mW_1pct", epoch_period_s=30.0, lora_sf=7, lora_bw_hz=125000, tx_erp_mw=50.0)
+    assert reg_erp_over["admitted"] is False and reg_erp_over["erp_compliant"] is False
+    try:
+        pico_main._load_provisioned_dd03_hmac_key(mac_key=None, allow_sim_ephemeral_key=False)
+        assert False, "Unprovisioned DD03 key load must fail closed with RuntimeError!"
+    except RuntimeError:
+        pass
+    test_key = b"PROVISIONED_UNIT_TEST_MAC_KEY_32"
     dd03 = pico_main.build_dd03_airspace_tracklet_frame(
-        7, 1700000000, 250, [{"az_deg": 145.2, "el_deg": 8.5, "az_sigma_deg": 2.5, "f0_hz": 128.0, "fdot_hz_s": 0.5, "snr_db": 14.5}], -25, 38
+        7, 1700000000, 250, [{"az_deg": 145.2, "el_deg": -8.5, "az_sigma_deg": 2.5, "f0_hz": 128.0, "fdot_hz_s": 0.5, "snr_db": 14.5}], -25, 38, mac_key=test_key, top_class=3, clock_quality=2
     )
     assert len(dd03) == 58 and dd03[:3] == b"DD\x03"
+    assert dd03[11] == ((3 << 4) | (1 << 2) | 2)
+    assert struct.unpack(">b", dd03[14:15])[0] == -17
+    # Verify anti-replay window and MAC verification
+    replay_db = {}
+    v_ok = pico_main.verify_dd03_replay_and_mac(dd03, replay_db, current_epoch_s=1700000002, mac_key=test_key)
+    assert v_ok["valid"] is True
+    v_rep = pico_main.verify_dd03_replay_and_mac(dd03, replay_db, current_epoch_s=1700000003, mac_key=test_key)
+    assert v_rep["valid"] is False and v_rep["reason"] == "REPLAY_DETECTED"
+    # Verify MicroPython no-hmac path produces bit-identical RFC 2104 HMAC-SHA256-128 tag
+    import hmac as _std_hmac
+    import hashlib as _std_hashlib
+    expected_mac16 = _std_hmac.new(test_key, dd03[:42], _std_hashlib.sha256).digest()[:16]
+    assert dd03[42:58] == expected_mac16, "CPython HMAC-SHA256-128 tag mismatch"
+    saved_hmac = sys.modules.get("hmac")
+    try:
+        sys.modules["hmac"] = None  # Force ImportError on `import hmac` to test MicroPython uhashlib path
+        mp_digest = pico_main._rfc2104_hmac_sha256(test_key, dd03[:42])[:16]
+        assert mp_digest == expected_mac16, "MicroPython RFC 2104 HMAC-SHA256 path must match CPython hmac bit-for-bit!"
+    finally:
+        if saved_hmac is not None:
+            sys.modules["hmac"] = saved_hmac
+        else:
+            sys.modules.pop("hmac", None)
 
     # 6. [P11-RF] Passive-RF & EU Direct Remote ID (ASTM F3411-22a) + [P12-BELT] Non-RF Rotorcraft Belt
     rid_coop = pico_main.parse_passive_remote_id_and_rf_energy(
@@ -321,6 +362,148 @@ def test_border_hardening_upgrades():
     print("    [+] All 5 Border-Hardening Upgrades + Airspace-Safety DD\\x03 Pod + [P11-RF]/[P12-BELT] + XM125/Garmin Allied Auto-Detect: PASSED")
 
 
+def test_corridor_turboshaft_smoke_tailchase_and_seismic_upgrades():
+    print("[*] Testing Phase V2.2 Upgrades 1-5 (Sub-Bass Turboshaft BPF + Decoy Gate, Fast Pre-Wake, TC001 LWIR Smoke Fusion, 180-deg Tail-Chase Cue & Seismic Blast EMA Freeze)...")
+    import main as pico_main
+    import numpy as np
+    import sys
+    import os
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../pi5_sender_node")))
+    import sender_node
+
+    # Upgrade 1A: Heavy Turboshaft Rotorcraft (31.2 Hz coaxial 2P / 39.2 Hz 5-blade, 0 dB ESC PWM, H2/H1 = 1.65)
+    heavy_real = pico_main.evaluate_non_rf_corridor_belt_step(
+        rotor_bpf_hz=31.2,
+        rotor_bpf_snr_db=16.0,
+        esc_pwm_sideband_snr_db=0.0,
+        xm125_micro_doppler_mps=19.5,
+        lwir_or_940nm_tripwire=True,
+        rf_burst_dbm=-108.0,
+        rotor_freq_jitter_hz_per_s=0.9,
+        harmonic_ratio_h2_h1=1.65,
+        sub20hz_1p_infrasound_snr_db=9.5,
+        peak_spl_dba=134.0,
+    )
+    assert heavy_real["verified_non_rf_rotorcraft"] is True
+    assert heavy_real["rotorcraft_acoustic_branch"] == "HEAVY_TURBOSHAFT_ROTORCRAFT"
+    assert heavy_real["heavy_turboshaft_harmonic_comb_matched"] is True
+    assert heavy_real["acoustic_decoy_speaker_rejected"] is False
+    assert heavy_real["stage1_acoustic_range_m"] == 1200.0
+    assert heavy_real["impulse_overload_blanked_ms"] == 2.0
+
+    # Upgrade 1B: Acoustic Speaker Decoy Rejection (31.2 Hz audio playback, ka << 1 -> 0 dB 1P infrasound & 0 m/s heavy rotor micro-Doppler)
+    decoy_step = pico_main.evaluate_non_rf_corridor_belt_step(
+        rotor_bpf_hz=31.2,
+        rotor_bpf_snr_db=15.0,
+        esc_pwm_sideband_snr_db=0.0,
+        xm125_micro_doppler_mps=0.0,
+        lwir_or_940nm_tripwire=False,
+        rf_burst_dbm=-108.0,
+        rotor_freq_jitter_hz_per_s=0.8,
+        harmonic_ratio_h2_h1=1.55,
+        sub20hz_1p_infrasound_snr_db=1.2,
+    )
+    assert decoy_step["verified_non_rf_rotorcraft"] is False
+    assert decoy_step["acoustic_decoy_speaker_rejected"] is True
+
+    # Upgrade 2: Fast Aerial Transit (65 m/s) SPI Instant-Snap + 0.48s DD\x03 Downstream Corridor Pre-Wake
+    prewake = pico_main.evaluate_upstream_corridor_prewake_and_fast_snap(
+        v_target_mps=65.0,
+        downstream_node_spacing_m=1500.0,
+        pi5_cold_boot_s=6.8,
+        radial_speed_mps=-65.0,
+        fdot_hz_per_s=-4.8,
+        rotor_bpf_hz=31.2,
+        snr_db=16.5,
+    )
+    assert prewake["fast_aerial_bypass_triggered"] is True
+    assert prewake["spi_instant_frame_bytes"] == 160 * 120
+    assert prewake["dd03_prewake_frame_bytes"] == 58
+    assert prewake["downstream_warm_stream_margin_s"] >= 15.0
+    assert prewake["downstream_camera_ready_before_arrival"] is True
+
+    # Upgrade 3: Dual-Band IMX708 + TOPDON TC001 (8-14 um LWIR) Through-Smoke Capture & Hotspot Fusion
+    smoke_eo = np.full((120, 160, 3), 72, dtype=np.uint8)  # Low-contrast grey soot plume (RMS contrast ~ 0)
+    lwir_map = np.full((192, 256), 8.0, dtype=np.float32)  # +8 C background
+    lwir_map[40:52, 90:108] = 520.0                        # +520 C turbine exhaust hotspot
+    lwir_map[120:136, 140:155] = 33.5                      # +33.5 C person/vehicle thermal signature
+    smoke_res = sender_node.detect_smoke_obscuration_and_fuse_tc001_lwir(
+        smoke_eo,
+        existing_detections=[],
+        simulated_lwir_temp_c_map=lwir_map,
+        soot_mass_conc_g_m3=1.8,
+        path_length_m=200.0,
+    )
+    assert smoke_res["smoke_or_fog_obscured"] is True
+    assert smoke_res["vis_055um_transmission_pct"] < 6.0
+    assert smoke_res["lwir_10um_transmission_pct"] > 85.0
+    assert smoke_res["tc001_lwir_sensor_active"] is True
+    assert smoke_res["lwir_hotspots_detected"] >= 2
+    classes_detected = {d["class"] for d in smoke_res["fused_detections"]}
+    assert "turbine_exhaust_hotspot" in classes_detected
+    assert "thermal_person_vehicle" in classes_detected
+
+    # Verify sharp EO detection lock (>=0.70 conf) suppresses false smoke-obscuration trigger on uniform background
+    clear_res = sender_node.detect_smoke_obscuration_and_fuse_tc001_lwir(
+        smoke_eo,
+        existing_detections=[{"class": "helicopter", "conf": 0.85, "box": [0.2, 0.2, 0.5, 0.5]}],
+        simulated_lwir_temp_c_map=None,
+    )
+    assert clear_res["smoke_or_fog_obscured"] is False
+
+    # Verify live evaluate_sensor_step() in PROFILE_NON_RF_CORRIDOR_BELT with 31.2 Hz heavy turboshaft rotorcraft
+    pico_main.sensor_health["seis"] = True
+    pico_main.sensor_health["mag"] = True
+    v_belt, t_belt, dist_belt, _ = pico_main.evaluate_sensor_step(
+        current_mag=5000, mag_ema=3000, current_seis=700, seis_ema=150,
+        profile=pico_main.PROFILE_NON_RF_CORRIDOR_BELT, loop_count=1,
+        rotor_bpf_hz=31.2, harmonic_ratio_h2_h1=1.65, sub20hz_1p_infrasound_snr_db=9.5,
+    )
+    assert v_belt is True and t_belt is True and dist_belt == 1200000
+
+    # Upgrade 4: Cross-Node 180-deg Receding Tail-Chase Angular-Rate (omega = v_t * Z_0 / R^2) Cueing
+    cue_headon = pico_main.compute_cross_node_tailchase_cue(
+        v_target_mps=65.0, altitude_agl_m=32.0, along_track_x_m=-380.0
+    )
+    assert cue_headon["frontal_dead_zone_inhibit"] is True
+    assert cue_headon["tailchase_sweet_spot_fire"] is False
+
+    cue_overhead = pico_main.compute_cross_node_tailchase_cue(
+        v_target_mps=65.0, altitude_agl_m=32.0, along_track_x_m=0.0
+    )
+    assert cue_overhead["overhead_slew_limit_exceeded"] is True
+    assert cue_overhead["los_omega_degs"] > 110.0
+
+    cue_prewarm = pico_main.compute_cross_node_tailchase_cue(
+        v_target_mps=65.0, altitude_agl_m=32.0, along_track_x_m=162.5  # t = +2.5 s
+    )
+    assert cue_prewarm["bcu_pre_uncage_trigger"] is True
+
+    cue_tailchase = pico_main.compute_cross_node_tailchase_cue(
+        v_target_mps=65.0, altitude_agl_m=32.0, along_track_x_m=273.0  # t = +4.2 s
+    )
+    assert cue_tailchase["tailchase_sweet_spot_fire"] is True
+    assert cue_tailchase["los_omega_degs"] < 5.0
+    assert cue_tailchase["aspect_deg"] > 170.0
+
+    # Upgrade 5: Seismic Blast-vs-Footstep Classifier & EMA Baseline Freeze
+    seis_blast = pico_main.classify_seismic_event_signature(
+        pgv_mm_s=16.5, crest_factor=6.8, dominant_freq_hz=12.0, current_seis_counts=18000, seis_ema_counts=150
+    )
+    assert seis_blast["seismic_event_class"] == "IMPULSE_BLAST_OR_QUARRY_DETONATION"
+    assert seis_blast["freeze_ema_update"] is True
+    assert seis_blast["seis_ema_after"] == 150, "EMA baseline must remain frozen at 150 during impulse blast!"
+    assert pico_main.update_seismic_ema_with_blast_guard(18000, 150) == 150
+    assert pico_main.update_seismic_ema_with_blast_guard(280, 150) > 150
+
+    seis_step = pico_main.classify_seismic_event_signature(
+        pgv_mm_s=0.32, crest_factor=2.9, dominant_freq_hz=24.0, current_seis_counts=380, seis_ema_counts=150
+    )
+    assert seis_step["seismic_event_class"] == "FOOTSTEP_OR_PERSON"
+    assert seis_step["freeze_ema_update"] is False
+    print("    [+] Phase V2.2 Upgrades 1-5 (Turboshaft BPF, Pre-Wake, TC001 LWIR Smoke Fusion, 180-deg Tail-Chase & Seismic Blast Freeze): PASSED")
+
+
 if __name__ == "__main__":
     print("==================================================")
     print("PI-DIODE-TRAILCAM FIRMWARE & PROTOCOL TEST SUITE")
@@ -331,4 +514,5 @@ if __name__ == "__main__":
     test_receiver_hub_signature_verification()
     test_sensor_profiles_and_debounced_wake()
     test_border_hardening_upgrades()
+    test_corridor_turboshaft_smoke_tailchase_and_seismic_upgrades()
     print("\n[ALL TESTS PASSED SUCCESSFULLY!]")

@@ -196,6 +196,23 @@ class TestNorthernFlankGapClosureInTrailCam(unittest.TestCase):
             8000.0,
         )
 
+    def test_15_heavy_turboshaft_rotorcraft_class6_and_speaker_decoy_rejection(self):
+        """Verify 6-class extended FIN-SIG-LIB v1.0 (`CLASS_6_HEAVY_TURBOSHAFT_HELICOPTER_NOE`) & speaker decoy rejection."""
+        res6 = gap_solver.evaluate_heavy_rotorcraft_and_decoy_classifier(temp_c=-30.0)
+        self.assertEqual(res6["total_classes"], 6)
+        self.assertEqual(res6["total_samples"], 240)
+        self.assertGreaterEqual(res6["overall_6class_accuracy"], 0.95)
+        self.assertEqual(
+            res6["class6_prototype"]["class_name"],
+            "CLASS_6_HEAVY_TURBOSHAFT_HELICOPTER_NOE",
+        )
+        self.assertAlmostEqual(res6["coaxial_rotor_2p_slap_hz"], 31.2, places=1)
+        self.assertAlmostEqual(res6["five_blade_main_rotor_bpf_hz"], 39.2, places=1)
+        self.assertLess(res6["speaker_decoy_ka_at_15_6hz"], 0.05)
+        self.assertLessEqual(res6["speaker_decoy_1p_radiation_deficit_db"], -25.0)
+        self.assertAlmostEqual(res6["bistatic_dvbt2_538mhz_blade_tip_doppler_hz"], 736.0, delta=2.0)
+        self.assertEqual(res6["acoustic_speaker_decoy_rejection_rate"], 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

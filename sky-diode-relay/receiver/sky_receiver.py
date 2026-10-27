@@ -1499,6 +1499,66 @@ def demodulate_vk7mo_lockin_stream(
     }
 
 
+def evaluate_passive_bistatic_rotor_micro_doppler(
+    illuminator_freq_mhz=538.0,
+    blade_tip_speed_mps=215.0,
+    bistatic_angle_deg=35.0,
+    rotor_disk_rcs_m2=15.0,
+    measured_doppler_spread_hz=736.0,
+    measured_sideband_snr_db=14.2,
+    acoustic_bpf_hz=31.2,
+):
+    """
+    Passive Bistatic Broadcast-Illuminator (DVB-T2 UHF 470-690 MHz / VHF-FM 88-108 MHz) Rotor
+    Blade-Tip Micro-Doppler Verifier for `ADALM-PLUTO` (`AD9363`, 70-6000 MHz via `u_boot` env
+    or 325-3800 MHz stock):
+      - Operates at strictly 0.000 W RF transmit power (`tx_power_w = 0.0`) by using existing
+        civilian DVB-T2 digital television transmitters (e.g., 538.0 MHz UHF, lambda = 0.5576 m)
+        as non-cooperative bistatic illuminators of opportunity.
+      - Bistatic advancing/receding rotor blade-tip micro-Doppler shift:
+          delta_f_D = (2 * V_tip / lambda) * cos(beta / 2)
+        For `V_tip = 215.0 m/s`, `f_c = 538.0 MHz` (`lambda = 0.5576 m`), and `beta = 35.0 deg`:
+          delta_f_D = +-736.0 Hz (full tip-to-tip spread = 1,472.0 Hz), modulated at the blade-passing
+          flash interval (`f_BPF = 31.2 Hz` or `39.2 Hz`).
+      - Discriminates 100% of small-aperture acoustic speaker decoys (which broadcast recorded
+        helicopter audio at `31.2 Hz` from a small multirotor with `0.0 m^2` heavy-rotor disk RCS
+        and lack the +-736 Hz UHF blade-tip flash sidebands).
+    """
+    import math
+
+    c_light = 299792458.0
+    freq_hz = max(1.0e6, float(illuminator_freq_mhz) * 1.0e6)
+    wavelength_m = c_light / freq_hz
+    half_beta_rad = math.radians(float(bistatic_angle_deg) * 0.5)
+    expected_tip_doppler_hz = (2.0 * float(blade_tip_speed_mps) / wavelength_m) * math.cos(half_beta_rad)
+
+    meas_fd = abs(float(measured_doppler_spread_hz))
+    snr_val = float(measured_sideband_snr_db)
+    rcs_val = float(rotor_disk_rcs_m2)
+
+    physical_rotor_verified = (
+        (rcs_val >= 1.5)
+        and (snr_val >= 6.0)
+        and (abs(meas_fd - expected_tip_doppler_hz) <= max(120.0, 0.25 * expected_tip_doppler_hz))
+    )
+    acoustic_speaker_decoy_flagged = (
+        (14.0 <= float(acoustic_bpf_hz) <= 95.0) and (not physical_rotor_verified)
+    )
+
+    return {
+        "illuminator_freq_mhz": round(float(illuminator_freq_mhz), 2),
+        "wavelength_m": round(wavelength_m, 4),
+        "bistatic_angle_deg": round(float(bistatic_angle_deg), 1),
+        "expected_blade_tip_doppler_hz": round(expected_tip_doppler_hz, 1),
+        "measured_doppler_spread_hz": round(meas_fd, 1),
+        "measured_sideband_snr_db": round(snr_val, 1),
+        "rotor_disk_rcs_m2": round(rcs_val, 2),
+        "physical_rotor_disk_verified": bool(physical_rotor_verified),
+        "acoustic_speaker_decoy_flagged": bool(acoustic_speaker_decoy_flagged),
+        "tx_power_w": 0.0,
+    }
+
+
 class PlutoSDRReceiver:
     """
     Hardware interface for Analog Devices `ADALM-PLUTO` (`AD9363`) SDR + `Skyworks SKY65405-21EK1` LNA.
@@ -1507,6 +1567,8 @@ class PlutoSDRReceiver:
     - When `pyadi-iio` (`adi`) is installed and an `ADALM-PLUTO` is reachable at `sdr_uri`,
       captures IQ samples across the hopped carrier schedule and demodulates via
       `demodulate_vk7mo_lockin_stream()`.
+    - Also supports 0.000 W passive bistatic UHF DVB-T2 (538 MHz) rotor blade-tip micro-Doppler
+      verification via `verify_bistatic_rotor_micro_doppler()`.
     """
 
     def __init__(self, sdr_uri="ip:192.168.2.2", civilian_eu_compliant=False, simulate_if_missing=True):
@@ -1523,6 +1585,26 @@ class PlutoSDRReceiver:
         except Exception:
             if not self.simulate_if_missing:
                 raise RuntimeError(f"ADALM-PLUTO SDR not reachable at {self.sdr_uri} and simulate_if_missing=False")
+
+    def verify_bistatic_rotor_micro_doppler(
+        self,
+        illuminator_freq_mhz=538.0,
+        blade_tip_speed_mps=215.0,
+        bistatic_angle_deg=35.0,
+        rotor_disk_rcs_m2=15.0,
+        measured_doppler_spread_hz=736.0,
+        measured_sideband_snr_db=14.2,
+        acoustic_bpf_hz=31.2,
+    ):
+        return evaluate_passive_bistatic_rotor_micro_doppler(
+            illuminator_freq_mhz=illuminator_freq_mhz,
+            blade_tip_speed_mps=blade_tip_speed_mps,
+            bistatic_angle_deg=bistatic_angle_deg,
+            rotor_disk_rcs_m2=rotor_disk_rcs_m2,
+            measured_doppler_spread_hz=measured_doppler_spread_hz,
+            measured_sideband_snr_db=measured_sideband_snr_db,
+            acoustic_bpf_hz=acoustic_bpf_hz,
+        )
 
     def receive_and_demodulate(
         self,

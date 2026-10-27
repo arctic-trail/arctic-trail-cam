@@ -758,10 +758,12 @@
           <div class="map-toolbar">
             <div class="toolbar-cluster">
               <button class="btn primary" id="toolPanMap" onclick="setMapTool('PAN_MAP')" title="Default Mode: Drag any Drone to a position/target, drag any Search Box handle (◻) to stretch it, or drag map to pan">✋ Pan / Drag Drone / Stretch Box</button>
+              <button class="btn" id="toolMultiSelectTag" onclick="toggleMapSubTool('MULTI_SELECT_TAG')" style="border-color:rgba(56,189,248,0.55);color:#38bdf8;" title="Drag a selection rectangle on Map or Drone Video (or Shift+Click) to select multiple tracked people/objects and assign emoji/label tags in bulk!">⬚ Multi-Select Tag</button>
               <button class="btn" id="toolGotoPoint" onclick="toggleMapSubTool('GOTO_POINT')" title="Click anywhere on Map or Drone Video to command the selected Drone to fly there from its current position">📍 Send Drone to Point</button>
               <button class="btn" id="toolTrackObject" onclick="toggleMapSubTool('TRACK_OBJECT')" title="Click any object or point on Map or Drone Video to lock &amp; track it with the selected Drone">🎯 Mark Object to Track</button>
               <button class="btn" id="toolDrawBox" onclick="toggleDrawNewBoxTool()" title="Enable Drawing Tool to redraw a brand-new Search Area from scratch (Drones will fly from their current positions!)">📐 Draw New Box: OFF</button>
-              <button class="btn warning" id="toolDropMode" onclick="toggleDropMarkerMode()" title="Switch ON to click anywhere on Map or Video to mark a Payload Drop">🪂 Mark Drop: OFF</button>
+              <button class="btn warning" id="toolDropMode" onclick="toggleDropMarkerMode()" title="Switch ON to click anywhere on Map or Video to mark a Payload or Parachute-Tripod Drop">🪂 Mark Drop: OFF</button>
+              <button class="btn success" id="btnToolbarDualPodSortie" onclick="startDualPodWholeMissionSim()" title="Simulate full 2-Pod OPAS-JALUSTA v2.2-ANCHOR Sortie: Launch -> GNSS-Free Nav -> Ridge Drop A1 (5.83 kgf) -> Canyon Drop A2 (9.33 kgf) -> Drone RTB -> 2-Hop Mesh & Target Alerts!">📡 Run 2-Pod Sortie &amp; Mesh</button>
               <button class="btn" onclick="restartCooperativeSearch()" title="Reset simulation to initial launch positions and 0% shroud">↺ Restart Scan</button>
             </div>
 
@@ -883,13 +885,14 @@
           </button>
         </div>
 
-        <!-- Camera Zoom, Sensor & 1:1 Trackpad Stick Steering Subbar -->
+        <!-- Camera Zoom, Sensor, Emoji Badge Style & 1:1 Trackpad Stick Steering Subbar -->
         <div class="osd-subbar">
-          <span id="videoSubbarHint">Live Google Earth z=18..19 feed • Drag Drone on Map or use Trackpad Stick to steer</span>
+          <span id="videoSubbarHint">Click any target or <strong>drag a box</strong> to multi-select &amp; assign emoji/label tags</span>
           <div style="display:flex;gap:4px;align-items:center;">
+            <button class="btn warning" id="btnToggleBadgeDisplayStyle" onclick="cycleTrackedBadgeDisplayStyle()" style="padding:2px 8px;" title="Switch floating callout badge style above tracked people/objects (Emoji + Label vs. Big Emoji Speech-Bubble like Screenshot)">💬 Badges: Emoji + Label</button>
             <button class="btn" id="btnVideoTrackpadSteer" onclick="toggleVideoTrackpadSteerMode()" style="padding:2px 8px;border-color:rgba(56,189,248,0.5);color:#38bdf8;" title="Move your finger on the trackpad inside the Drone Video (or use the 2D Trackpad Box on the right) to steer the selected drone 1:1">🕹️ Trackpad Steer: OFF</button>
             <button class="btn" onclick="adjustOsdZoom(-0.8)" style="padding:2px 7px;">−</button>
-            <button class="btn success" id="btnOsdZoomPill" onclick="adjustOsdZoom(0)" style="padding:2px 7px;">3.0x</button>
+            <button class="btn success" id="btnOsdZoomPill" onclick="adjustOsdZoom(0)" style="padding:2px 7px;">2.2x</button>
             <button class="btn" onclick="adjustOsdZoom(0.8)" style="padding:2px 7px;">+</button>
             <button class="btn" id="btnOsdSensorMode" onclick="cycleOsdSensorPalette()" style="padding:2px 7px;">EO + Thermal</button>
           </div>
@@ -897,6 +900,46 @@
 
         <div class="osd-canvas-wrap" id="osdWrap">
           <canvas id="evolvedOsdCanvas" width="760" height="680"></canvas>
+
+          <!-- Floating Individual & Multi-Select Emoji / Short-Label Quick-Tagger Bar over Camera View -->
+          <div id="floatingEmojiTaggerBar" style="position:absolute;top:10px;left:10px;right:10px;z-index:22;background:rgba(16,18,26,0.94);backdrop-filter:blur(16px);border:1.5px solid rgba(56,189,248,0.65);border-radius:10px;padding:7px 10px;display:flex;flex-direction:column;gap:6px;box-shadow:0 8px 26px rgba(0,0,0,0.55);">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+              <div style="display:flex;align-items:center;gap:7px;">
+                <span style="background:rgba(56,189,248,0.2);color:#38bdf8;font-weight:700;font-size:11px;padding:2px 7px;border-radius:5px;" id="lblFloatingTagSelectionCount">3 Selected (Multi-Select)</span>
+                <span style="font-size:11.5px;color:#e4e4e7;" id="lblFloatingTagTargetNames">Rescuer #1, Rescuer #2, SAR K9</span>
+              </div>
+              <div style="display:flex;gap:4px;align-items:center;">
+                <button class="win-btn" onclick="selectTrackedGroup('HIKERS')" style="font-size:10.5px;padding:2px 6px;color:#fca5a5;border-color:rgba(255,69,58,0.4);">🆘 Select Hikers</button>
+                <button class="win-btn" onclick="selectTrackedGroup('RESCUERS')" style="font-size:10.5px;padding:2px 6px;color:#4ade80;border-color:rgba(48,209,88,0.4);">⛑️ Select Rescuers (3)</button>
+                <button class="win-btn" onclick="selectTrackedGroup('ALL')" style="font-size:10.5px;padding:2px 6px;">☑️ All</button>
+                <button class="win-btn" onclick="clearTrackedSelection()" style="font-size:10.5px;padding:2px 6px;">✕ Clear</button>
+              </div>
+            </div>
+            <!-- 1-Tap Role / Emoji Presets + Custom Emoji & Short Label Input -->
+            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;">
+              <span style="font-size:10.5px;color:var(--text-secondary);margin-right:2px;">1-Tap Tag:</span>
+              <button class="win-btn" onclick="applyQuickPresetToSelected('🆘', 'Lost Hiker', '#ff453a', 'HIKER')" style="background:rgba(255,69,58,0.2);border-color:#ff453a;color:#ffffff;font-size:11px;padding:2px 7px;">🆘 Lost Hiker</button>
+              <button class="win-btn" onclick="applyQuickPresetToSelected('⛑️', 'Rescuer', '#30d158', 'RESCUER')" style="background:rgba(48,209,88,0.2);border-color:#30d158;color:#ffffff;font-size:11px;padding:2px 7px;">⛑️ Rescuer</button>
+              <button class="win-btn" onclick="applyQuickPresetToSelected('🐕', 'SAR K9', '#38bdf8', 'RESCUER')" style="background:rgba(56,189,248,0.2);border-color:#38bdf8;color:#ffffff;font-size:11px;padding:2px 7px;">🐕 SAR K9</button>
+              <button class="win-btn" onclick="applyQuickPresetToSelected('🩺', 'SAR Medic', '#60a5fa', 'RESCUER')" style="background:rgba(96,165,250,0.2);border-color:#60a5fa;color:#ffffff;font-size:11px;padding:2px 7px;">🩺 Medic</button>
+              <button class="win-btn" onclick="applyQuickPresetToSelected('🇫🇮', 'FIN SAR', '#38bdf8', 'RESCUER')" style="background:rgba(56,189,248,0.18);border-color:#38bdf8;color:#ffffff;font-size:11px;padding:2px 7px;">🇫🇮 FIN Flag</button>
+              <button class="win-btn" onclick="applyQuickPresetToSelected('🚩', 'Target', '#ff9f0a', 'HIKER')" style="background:rgba(255,159,10,0.2);border-color:#ff9f0a;color:#ffffff;font-size:11px;padding:2px 7px;">🚩 Flag</button>
+              <button class="win-btn" onclick="applyQuickPresetToSelected('🛸', 'Drone', '#a855f7', 'DRONE')" style="background:rgba(168,85,247,0.2);border-color:#a855f7;color:#ffffff;font-size:11px;padding:2px 7px;">🛸 Drone</button>
+              <button class="win-btn" onclick="applyQuickPresetToSelected('✈️', 'Plane', '#38bdf8', 'AIRCRAFT')" style="font-size:11px;padding:2px 7px;">✈️ Plane</button>
+              <button class="win-btn" onclick="applyQuickPresetToSelected('🦌', 'Wildlife', '#a1a1aa', 'ANIMAL')" style="font-size:11px;padding:2px 7px;">🦌 Animal</button>
+              <button class="win-btn" onclick="applyQuickPresetToSelected('🚙', 'Vehicle', '#ff9f0a', 'VEHICLE')" style="font-size:11px;padding:2px 7px;">🚙 Vehicle</button>
+              <button class="win-btn" onclick="applyQuickPresetToSelected('📡', 'Tripod Node', '#64d2ff', 'TRIPOD_NODE')" style="font-size:11px;padding:2px 7px;">📡 Tripod</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:5px;">
+              <input type="text" id="inpCustomEmojiQuick" value="⛑️" placeholder="Emoji" style="width:44px;text-align:center;background:#0e0e13;color:#ffffff;border:1px solid var(--border-strong);border-radius:6px;padding:3px 4px;font-size:13px;" title="Any custom emoji or flag (e.g. 🆘, ⛑️, 🇫🇮, 🐕, 🔥)" />
+              <input type="text" id="inpCustomLabelQuick" placeholder="Custom short label (e.g. Alpha Searcher, Hiker #1, Injured)..." onkeydown="if(event.key==='Enter')applyCustomEmojiAndLabelToSelected('quick')" style="flex:1;background:#0e0e13;color:#ffffff;border:1px solid var(--border-strong);border-radius:6px;padding:4px 8px;font-size:11.5px;" />
+              <label style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--text-secondary);cursor:pointer;white-space:nowrap;" title="Automatically append #1, #2, #3 when tagging multiple objects at once">
+                <input type="checkbox" id="chkAutoNumberMultiTag" checked style="accent-color:#38bdf8;" />
+                <span>+#1,2</span>
+              </label>
+              <button class="btn primary" onclick="applyCustomEmojiAndLabelToSelected('quick')" style="padding:4px 10px;font-size:11.5px;">✓ Apply Tag</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1070,6 +1113,47 @@
             </div>
           </div>
 
+          <!-- CARD 2A: INDIVIDUAL & MULTI-SELECT EMOJI / SHORT-LABEL TAGGING (HIKERS VS. RESCUERS) -->
+          <div class="step-card" style="border-color:rgba(56,189,248,0.55);background:linear-gradient(180deg,rgba(56,189,248,0.09),rgba(24,25,34,0.96));">
+            <div class="step-header">
+              <span class="step-title">🏷️ Emoji &amp; Label Tagger (Hiker vs. Rescuer)</span>
+              <span class="step-badge" id="badgeSidebarTagCount" style="background:rgba(56,189,248,0.22);color:#38bdf8;">3 Selected</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-secondary);line-height:1.35;">
+              Click any person/object on <strong>Video/Map</strong> (or <strong>drag a marquee box</strong> / <strong>Shift+Click</strong>) to select 1 or multiple targets and assign any emoji or short label.
+            </div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+              <button class="win-btn" onclick="selectTrackedGroup('HIKERS')" style="font-size:10.5px;padding:2px 6px;color:#fca5a5;border-color:rgba(255,69,58,0.45);">🆘 Hikers</button>
+              <button class="win-btn" onclick="selectTrackedGroup('RESCUERS')" style="font-size:10.5px;padding:2px 6px;color:#4ade80;border-color:rgba(48,209,88,0.45);">⛑️ Rescuers (3)</button>
+              <button class="win-btn" onclick="selectTrackedGroup('ALL')" style="font-size:10.5px;padding:2px 6px;">☑️ Select All</button>
+              <button class="win-btn" onclick="clearTrackedSelection()" style="font-size:10.5px;padding:2px 6px;">✕ Clear</button>
+              <button class="win-btn" onclick="cycleTrackedBadgeDisplayStyle()" id="btnSidebarBadgeMode" style="font-size:10.5px;padding:2px 6px;color:#fbbf24;border-color:rgba(255,159,10,0.45);">💬 Style: Emoji+Label</button>
+            </div>
+            <!-- Interactive Checklist of All Tracked Objects -->
+            <div id="sidebarTrackedObjectsList" style="display:flex;flex-direction:column;gap:4px;max-height:165px;overflow-y:auto;padding-right:2px;"></div>
+            <!-- Quick Emoji Picker Row -->
+            <div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center;">
+              <span style="font-size:10px;color:var(--text-secondary);">Emoji:</span>
+              <button class="win-btn" onclick="setCustomEmojiField('🆘')" style="padding:2px 5px;font-size:12px;">🆘</button>
+              <button class="win-btn" onclick="setCustomEmojiField('⛑️')" style="padding:2px 5px;font-size:12px;">⛑️</button>
+              <button class="win-btn" onclick="setCustomEmojiField('🐕')" style="padding:2px 5px;font-size:12px;">🐕</button>
+              <button class="win-btn" onclick="setCustomEmojiField('🩺')" style="padding:2px 5px;font-size:12px;">🩺</button>
+              <button class="win-btn" onclick="setCustomEmojiField('🇫🇮')" style="padding:2px 5px;font-size:12px;">🇫🇮</button>
+              <button class="win-btn" onclick="setCustomEmojiField('🚩')" style="padding:2px 5px;font-size:12px;">🚩</button>
+              <button class="win-btn" onclick="setCustomEmojiField('🏃')" style="padding:2px 5px;font-size:12px;">🏃</button>
+              <button class="win-btn" onclick="setCustomEmojiField('🛸')" style="padding:2px 5px;font-size:12px;">🛸</button>
+              <button class="win-btn" onclick="setCustomEmojiField('✈️')" style="padding:2px 5px;font-size:12px;">✈️</button>
+              <button class="win-btn" onclick="setCustomEmojiField('🦌')" style="padding:2px 5px;font-size:12px;">🦌</button>
+              <button class="win-btn" onclick="setCustomEmojiField('🚙')" style="padding:2px 5px;font-size:12px;">🚙</button>
+              <button class="win-btn" onclick="setCustomEmojiField('📡')" style="padding:2px 5px;font-size:12px;">📡</button>
+            </div>
+            <div style="display:flex;gap:5px;align-items:center;">
+              <input type="text" id="inpCustomEmojiSidebar" value="⛑️" style="width:42px;text-align:center;background:#0e0e13;color:#ffffff;border:1px solid var(--border-strong);border-radius:6px;padding:4px;font-size:13px;" />
+              <input type="text" id="inpCustomLabelSidebar" placeholder="Short label (e.g. Rescuer, Lost Hiker)..." onkeydown="if(event.key==='Enter')applyCustomEmojiAndLabelToSelected('sidebar')" style="flex:1;background:#0e0e13;color:#ffffff;border:1px solid var(--border-strong);border-radius:6px;padding:4px 7px;font-size:11.5px;" />
+              <button class="btn primary" onclick="applyCustomEmojiAndLabelToSelected('sidebar')" style="padding:4px 9px;font-size:11.5px;">Assign</button>
+            </div>
+          </div>
+
           <!-- CARD 2: TARGET ASSIGNMENT (WITH EASY 1-CLICK CANCEL!) -->
           <div class="step-card">
             <div class="step-header">
@@ -1090,8 +1174,8 @@
               <div style="display:flex;justify-content:space-between;align-items:center;">
                 <span style="color:var(--text-secondary);">Tracked Target:</span>
                 <select id="selGuidedTarget" class="select-input" onchange="switchGuidedTarget(this.value)" style="padding:3px 6px;font-size:11.5px;">
-                  <option value="PERSON" selected>Lost Hiker (+31.4°C) &rarr; Hut</option>
-                  <option value="VEHICLE">Snowmobile (+34.0°C) &rarr; Road</option>
+                  <option value="PERSON" selected>🆘 Lost Hiker (+31.4°C) &rarr; Hut</option>
+                  <option value="VEHICLE">🚙 Snowmobile (+34.0°C) &rarr; Road</option>
                 </select>
               </div>
               <div style="display:flex;gap:6px;margin-top:3px;">
@@ -1109,11 +1193,19 @@
             </div>
           </div>
 
-          <!-- CARD 3: CLEAR PAYLOAD DROP SWITCH & CANCELABLE DROP QUEUE -->
+          <!-- CARD 3: CLEAR PAYLOAD / PARACHUTE-TRIPOD SENTINEL DROP SWITCH & CANCELABLE DROP QUEUE -->
           <div class="step-card">
             <div class="step-header">
-              <span class="step-title">3. Payload Drop (+42 °C Rescue Cask)</span>
+              <span class="step-title">3. Parachute Drop (Tripod Sentinel / Cask)</span>
               <span class="step-badge" id="badgeDropStatus">Ready Aboard Drone 1</span>
+            </div>
+
+            <div class="field-box" style="padding:4px 7px;">
+              <span class="field-label">Select Parachute Payload Type</span>
+              <select id="selDropPayloadType" class="select-input" style="width:100%;padding:3px 5px;font-size:11px;margin-top:2px;">
+                <option value="TRIPOD_SENTINEL" selected>📡 Parachute-Gravity Tripod Sentinel (2.15m Mast, 0 Motors)</option>
+                <option value="RESCUE_CASK">🔥 +42 °C Heated Survival Cask + Opaslyhty Beacon</option>
+              </select>
             </div>
 
             <label class="toggle-row" style="background:rgba(255,159,10,0.10);border:1px solid rgba(255,159,10,0.35);padding:7px 9px;border-radius:8px;">
@@ -1123,7 +1215,7 @@
 
             <div class="assignment-box" id="dropStatusCard">
               <div id="dropStatusDescription" style="color:var(--text-secondary);line-height:1.4;">
-                <strong>No Drop Queued:</strong> Turn on the <em>Mark Payload Drop</em> switch above (or click <em>Queue Drop 15m from Hiker</em> below) to assign a drop point. You can cancel anytime before release.
+                <strong>No Drop Queued:</strong> Turn on the <em>Mark Payload Drop</em> switch above (or click <em>Queue Drop 15m from Hiker</em> below) to drop the motor-free Parachute-Tripod Sentinel or +42°C Cask.
               </div>
 
               <div style="display:flex;gap:6px;margin-top:4px;" id="dropActionButtons">
@@ -1141,6 +1233,18 @@
                 <button class="btn" id="btnSidebarReloadPayload" onclick="reloadPayloadSimulation()" style="flex:1;display:none;">
                   ↺ Reload Payload for Test
                 </button>
+              </div>
+              <button class="btn primary" id="btnCard3RunDualPodSortie" onclick="startDualPodWholeMissionSim()" style="width:100%;margin-top:4px;">
+                📡 Simulate 2-Pod Drop (v2.4-CONVERGED: 7.2–8.6 kgf Eq) &amp; 2-Hop Mesh
+              </button>
+              <div id="dualPodMeshTelemetryBox" style="margin-top:4px;padding:6px 8px;background:rgba(0,0,0,0.38);border:1px solid rgba(56,189,248,0.45);border-radius:6px;font-family:var(--font-mono);font-size:10px;line-height:1.4;color:#e2e8f0;max-height:115px;overflow-y:auto;">
+                <div style="color:#38bdf8;font-weight:700;">📡 2-Hop TDMA Mesh &amp; Sentinel Log (v2.4-CONVERGED):</div>
+                <div id="dualPodMeshLogLines" style="display:flex;flex-direction:column;gap:2px;margin-top:3px;">
+                  <span style="color:#4ade80;">• [BOOT-A1] Ridge A1 (24.6°): 3-Foot Spades = 24.7 N·m (7.19 kgf eq) | +26.6 dB</span>
+                  <span style="color:#34d399;">• [BOOT-A2] Gorge A2 (19.2°): Spades+Scoops = 29.5 N·m (8.60 kgf eq) | 2-Hop UP</span>
+                  <span style="color:#fca5a5;">• [ALERT-001] 🆘 Lost Hiker #1 @ 74m (75m Geophone + +31.8°C + WebP)</span>
+                  <span style="color:#fcd34d;">• [ALERT-002] 🛸 Drone #1 @ 1.12km WNW (4-Mic 195Hz + 2.4G)</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1644,7 +1748,7 @@
 
     let videoHoverWorldPt = null;
     let selectedCameraSource = 'DRONE_0';
-    let osdZoomFactor = 3.0;
+    let osdZoomFactor = 2.2;
     let osdSensorMode = 'EO+LWIR';
     let simRunning = true;
     let simSpeed = 1.0;
@@ -1658,10 +1762,23 @@
       keysDown: {}
     };
     let draggingDroneState = null; // { droneIdx, targetWx, targetWy, hoverSubject }
-    let customTrackedObject = {
+
+    // =========================================================================
+    // 3B. INDIVIDUAL & MULTI-SELECT TRACKED OBJECT EMOJI / SHORT-LABEL REGISTRY
+    //     Allows effortless 1-click or marquee multi-select tagging of Lost Hikers,
+    //     Rescue Searchers, SAR K9, Drones, Planes, Animals, Vehicles & Tripods!
+    // =========================================================================
+    let trackedBadgeDisplayStyle = 'EMOJI_AND_LABEL'; // 'EMOJI_AND_LABEL' | 'EMOJI_ONLY_BUBBLE'
+    let videoMarqueeSelect = null; // { startX, startY, curX, curY, active }
+    let mapMarqueeSelect = null;   // { startCx, startCy, curCx, curCy, active }
+
+    const customTrackedObject = {
       active: false,
-      id: 'TGT-CUSTOM-03',
+      id: 'TGT-CUSTOM-08',
+      emoji: '🚩',
       label: 'Marked Target',
+      category: 'HIKER',
+      badgeColor: '#ffd60a',
       x: -20,
       y: 25,
       tempC: '+29.8°C',
@@ -1669,21 +1786,347 @@
     };
 
     const lostPerson = {
+      active: true,
       id: 'TGT-HIKER-01',
+      emoji: '🆘',
       label: 'Lost Hiker',
+      category: 'HIKER',
+      badgeColor: '#ff453a',
       x: 52,
       y: 64,
       tempC: '+31.4°C',
       arrived: false
     };
+
+    // 3 Rescue Searchers walking in formation along the canyon trail (matching screenshot!)
+    const rescueSearcher1 = {
+      active: true,
+      id: 'TGT-RESCUER-01',
+      emoji: '⛑️',
+      label: 'Rescuer #1',
+      category: 'RESCUER',
+      badgeColor: '#30d158',
+      x: 26,
+      y: 44,
+      tempC: '+32.8°C',
+      arrived: false
+    };
+    const rescueSearcher2 = {
+      active: true,
+      id: 'TGT-RESCUER-02',
+      emoji: '⛑️',
+      label: 'Rescuer #2',
+      category: 'RESCUER',
+      badgeColor: '#30d158',
+      x: 37,
+      y: 49,
+      tempC: '+32.6°C',
+      arrived: false
+    };
+    const rescueK9 = {
+      active: true,
+      id: 'TGT-RESCUER-03',
+      emoji: '🐕',
+      label: 'SAR K9',
+      category: 'RESCUER',
+      badgeColor: '#38bdf8',
+      x: 45,
+      y: 53,
+      tempC: '+33.2°C',
+      arrived: false
+    };
+
     const lostVehicle = {
+      active: true,
       id: 'TGT-SNOWMOBILE-02',
+      emoji: '🚙',
       label: 'Snowmobile',
+      category: 'VEHICLE',
+      badgeColor: '#ff9f0a',
       x: -145,
       y: 95,
       tempC: '+34.0°C',
       arrived: false
     };
+
+    const wildlifeMoose = {
+      active: true,
+      id: 'TGT-ANIMAL-04',
+      emoji: '🦌',
+      label: 'Moose',
+      category: 'ANIMAL',
+      badgeColor: '#a1a1aa',
+      x: 68,
+      y: 41,
+      tempC: '+28.5°C',
+      arrived: false
+    };
+
+    const reconDroneTarget = {
+      active: true,
+      id: 'TGT-DRONE-05',
+      emoji: '🛸',
+      label: 'Drone (2.4G)',
+      category: 'DRONE',
+      badgeColor: '#a855f7',
+      x: 20,
+      y: 68,
+      tempC: 'OcuSync RF',
+      arrived: false
+    };
+
+    const tripodRidgeNodeA1 = {
+      active: true,
+      id: 'TGT-TRIPOD-A1',
+      emoji: '📡',
+      label: 'Tripod A1 (7.2kgf eq)',
+      category: 'TRIPOD_NODE',
+      badgeColor: '#38bdf8',
+      x: -36,
+      y: 14,
+      tempC: 'Ridge +26.6dB',
+      arrived: false
+    };
+
+    const tripodSentinelNode = {
+      active: true,
+      id: 'TGT-TRIPOD-06',
+      emoji: '📡',
+      label: 'Tripod A2 (8.6kgf eq)',
+      category: 'TRIPOD_NODE',
+      badgeColor: '#34d399',
+      x: 33,
+      y: 62,
+      tempC: 'Gully +31.4dB',
+      arrived: false
+    };
+
+    let dualPodSortieState = {
+      active: true,
+      phase: 'MESH_OPERATIONAL',
+      stepTimer: null
+    };
+
+    function startDualPodWholeMissionSim() {
+      if (dualPodSortieState.stepTimer) clearInterval(dualPodSortieState.stepTimer);
+      const logEl = document.getElementById('dualPodMeshLogLines');
+      const d1 = drones[1]; // Drone 2 (Kilo) executes the 2-pod ridge + canyon deployment sortie
+      let step = 0;
+      const steps = [
+        () => {
+          d1.x = PLOWED_ROADHEAD.x; d1.y = PLOWED_ROADHEAD.y;
+          d1.sectorName = '2-Pod Sortie (3.26kg)';
+          updateAidBannerUI('🚀 [PHASE 1-2] Karhunkierros-X8 Centerline Tandem Launch (1.68kg Relay + 1.58kg Leaf, 0 N·m roll) • Pole-21 GPS Spoof rejected in 0.35s -> TERCOM+VIO (CEP 2.1m)');
+          if (logEl) logEl.innerHTML = `<span style="color:#38bdf8;">• [T+00:35] Tandem Launch (3.26kg, 0 N·m Roll) | TERCOM+VIO Nav (CEP 2.1m)</span>`;
+        },
+        () => {
+          d1.x = tripodRidgeNodeA1.x; d1.y = tripodRidgeNodeA1.y;
+          markCircleExplored(d1.x, d1.y, 48);
+          updateAidBannerUI('🪂 [PHASE 3-4] 10m AGL Drop Node A1 on 24.6° Ridge -> Land-Compact Slide-Stop + 3-Ring Cutaway -> 1.35m Spring Erect + 3-Foot Spades = 24.7 N·m (7.19 kgf eq, 34.3 m/s Limit)!');
+          if (logEl) logEl.innerHTML += `<span style="color:#4ade80;">• [BOOT-A1] Ridge A1 (24.6°): 3-Foot Spades = 24.7 N·m (7.19 kgf eq) | +26.6 dB</span>`;
+        },
+        () => {
+          d1.x = tripodSentinelNode.x; d1.y = tripodSentinelNode.y;
+          markCircleExplored(d1.x, d1.y, 48);
+          updateAidBannerUI('🪂 [PHASE 5] 10m AGL Drop Node A2 in 19.2° Gorge -> 3-Foot Spades + Self-Closing Scoops = 29.5 N·m (8.60 kgf eq) -> Cross-Band 915M/2.4G TDMA 2-Hop Mesh UP!');
+          if (logEl) logEl.innerHTML += `<span style="color:#34d399;">• [BOOT-A2] Gorge A2 (19.2°): Spades+Scoops = 29.5 N·m (8.60 kgf eq) | 2-Hop UP</span>`;
+        },
+        () => {
+          d1.x = PLOWED_ROADHEAD.x + 12; d1.y = PLOWED_ROADHEAD.y + 8;
+          d1.sectorName = 'RTB Docked (35.7% Cold)';
+          updateAidBannerUI('✓ [PHASE 6-7] Carrier Drone RTB Docked (430W empty in 12m/s crosswind, 35.7% Cold / 40.8% Nom Reserve) • 2-Hop Mesh Streaming ALERT-001 (Hiker 74m) & ALERT-002 (UAV 1.12km)!');
+          if (logEl) {
+            logEl.innerHTML += `<span style="color:#fca5a5;">• [ALERT-001] 🆘 Lost Hiker #1 @ 74m (75m Geophone + +31.8°C + WebP)</span>`;
+            logEl.innerHTML += `<span style="color:#fcd34d;">• [ALERT-002] 🛸 Drone #1 @ 1.12km WNW (4-Mic 195Hz + 2.4GHz RF)</span>`;
+          }
+        }
+      ];
+      steps[0]();
+      dualPodSortieState.stepTimer = setInterval(() => {
+        step += 1;
+        if (step < steps.length) {
+          steps[step]();
+        } else {
+          clearInterval(dualPodSortieState.stepTimer);
+          dualPodSortieState.stepTimer = null;
+        }
+      }, 1400);
+    }
+
+    function getAllActiveTrackedObjects() {
+      const list = [
+        lostPerson,
+        rescueSearcher1,
+        rescueSearcher2,
+        rescueK9,
+        tripodRidgeNodeA1,
+        tripodSentinelNode,
+        wildlifeMoose,
+        reconDroneTarget,
+        lostVehicle
+      ];
+      if (customTrackedObject.active) list.push(customTrackedObject);
+      return list;
+    }
+
+    // Default multi-selection highlights the 3 rescue searchers walking together so operator sees multi-select immediately!
+    const selectedTrackedIds = new Set(['TGT-RESCUER-01', 'TGT-RESCUER-02', 'TGT-RESCUER-03']);
+
+    function syncEmojiTaggingUI() {
+      const all = getAllActiveTrackedObjects();
+      const selectedObjs = all.filter(o => selectedTrackedIds.has(o.id));
+      const count = selectedObjs.length;
+
+      const lblCount = document.getElementById('lblFloatingTagSelectionCount');
+      const lblNames = document.getElementById('lblFloatingTagTargetNames');
+      const sideBadge = document.getElementById('badgeSidebarTagCount');
+
+      if (lblCount) {
+        lblCount.textContent = count === 0
+          ? '0 Selected (Click or Drag Box)'
+          : (count === 1 ? '1 Selected (Individual)' : `${count} Selected (Multi-Select)`);
+        lblCount.style.background = count > 0 ? 'rgba(56,189,248,0.22)' : 'rgba(255,255,255,0.08)';
+        lblCount.style.color = count > 0 ? '#38bdf8' : '#a1a1aa';
+      }
+      if (lblNames) {
+        lblNames.textContent = count === 0
+          ? 'Click any tracked person/object or drag a box in Video/Map to tag'
+          : selectedObjs.map(o => `${o.emoji} ${o.label}`).join(', ');
+      }
+      if (sideBadge) {
+        sideBadge.textContent = `${count} Selected`;
+      }
+
+      if (count === 1) {
+        const qE = document.getElementById('inpCustomEmojiQuick');
+        const qL = document.getElementById('inpCustomLabelQuick');
+        const sE = document.getElementById('inpCustomEmojiSidebar');
+        const sL = document.getElementById('inpCustomLabelSidebar');
+        if (qE && document.activeElement !== qE) qE.value = selectedObjs[0].emoji;
+        if (qL && document.activeElement !== qL) qL.value = selectedObjs[0].label;
+        if (sE && document.activeElement !== sE) sE.value = selectedObjs[0].emoji;
+        if (sL && document.activeElement !== sL) sL.value = selectedObjs[0].label;
+      }
+
+      const listWrap = document.getElementById('sidebarTrackedObjectsList');
+      if (listWrap) {
+        listWrap.innerHTML = all.map(o => {
+          const isSel = selectedTrackedIds.has(o.id);
+          return `<div onclick="toggleSelectTrackedObject('${o.id}', event)" style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:4px 7px;border-radius:6px;cursor:pointer;background:${isSel ? 'rgba(56,189,248,0.18)' : 'rgba(0,0,0,0.26)'};border:1px solid ${isSel ? '#38bdf8' : 'var(--border-subtle)'};font-size:11px;">
+            <div style="display:flex;align-items:center;gap:6px;overflow:hidden;">
+              <input type="checkbox" ${isSel ? 'checked' : ''} onclick="event.stopPropagation();toggleSelectTrackedObject('${o.id}', {shiftKey:true})" style="accent-color:#38bdf8;cursor:pointer;" />
+              <span style="font-size:13.5px;">${o.emoji}</span>
+              <strong style="color:#ffffff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${o.label}</strong>
+            </div>
+            <span style="font-size:10px;color:${o.badgeColor};font-weight:600;white-space:nowrap;">${o.tempC}</span>
+          </div>`;
+        }).join('');
+      }
+    }
+
+    function toggleSelectTrackedObject(objId, ev = null) {
+      const multi = ev && (ev.shiftKey || ev.metaKey || ev.ctrlKey);
+      if (multi) {
+        if (selectedTrackedIds.has(objId)) selectedTrackedIds.delete(objId);
+        else selectedTrackedIds.add(objId);
+      } else {
+        if (selectedTrackedIds.size === 1 && selectedTrackedIds.has(objId)) {
+          // keep selected so user can edit tag
+        } else {
+          selectedTrackedIds.clear();
+          selectedTrackedIds.add(objId);
+        }
+      }
+      syncEmojiTaggingUI();
+    }
+
+    function selectTrackedGroup(groupKey) {
+      selectedTrackedIds.clear();
+      const all = getAllActiveTrackedObjects();
+      all.forEach(o => {
+        if (groupKey === 'ALL') selectedTrackedIds.add(o.id);
+        else if (groupKey === 'HIKERS' && o.category === 'HIKER') selectedTrackedIds.add(o.id);
+        else if (groupKey === 'RESCUERS' && o.category === 'RESCUER') selectedTrackedIds.add(o.id);
+      });
+      syncEmojiTaggingUI();
+    }
+
+    function clearTrackedSelection() {
+      selectedTrackedIds.clear();
+      syncEmojiTaggingUI();
+    }
+
+    function setCustomEmojiField(emojiStr) {
+      const qE = document.getElementById('inpCustomEmojiQuick');
+      const sE = document.getElementById('inpCustomEmojiSidebar');
+      if (qE) qE.value = emojiStr;
+      if (sE) sE.value = emojiStr;
+      // If objects are selected, immediately update their emoji for instant 1-tap feedback!
+      const all = getAllActiveTrackedObjects();
+      const sel = all.filter(o => selectedTrackedIds.has(o.id));
+      if (sel.length > 0) {
+        sel.forEach(o => { o.emoji = emojiStr; });
+        syncEmojiTaggingUI();
+        updateAidBannerUI(`🏷️ Assigned Emoji "${emojiStr}" to ${sel.length} Tracked Object(s)`);
+      }
+    }
+
+    function applyQuickPresetToSelected(emojiStr, baseLabel, colorHex, categoryStr) {
+      const all = getAllActiveTrackedObjects();
+      let sel = all.filter(o => selectedTrackedIds.has(o.id));
+      if (sel.length === 0) {
+        sel = [lostPerson];
+        selectedTrackedIds.add(lostPerson.id);
+      }
+      const autoNum = document.getElementById('chkAutoNumberMultiTag')?.checked !== false;
+      sel.forEach((o, idx) => {
+        o.emoji = emojiStr;
+        o.label = (sel.length > 1 && autoNum) ? `${baseLabel} #${idx + 1}` : baseLabel;
+        if (colorHex) o.badgeColor = colorHex;
+        if (categoryStr) o.category = categoryStr;
+      });
+      const qE = document.getElementById('inpCustomEmojiQuick');
+      const qL = document.getElementById('inpCustomLabelQuick');
+      const sE = document.getElementById('inpCustomEmojiSidebar');
+      const sL = document.getElementById('inpCustomLabelSidebar');
+      if (qE) qE.value = emojiStr;
+      if (qL) qL.value = baseLabel;
+      if (sE) sE.value = emojiStr;
+      if (sL) sL.value = baseLabel;
+      syncEmojiTaggingUI();
+      updateAidBannerUI(`🏷️ Tagged ${sel.length} Tracked Object(s) as "${emojiStr} ${baseLabel}"`);
+    }
+
+    function applyCustomEmojiAndLabelToSelected(source) {
+      const emojiInp = document.getElementById(source === 'sidebar' ? 'inpCustomEmojiSidebar' : 'inpCustomEmojiQuick');
+      const labelInp = document.getElementById(source === 'sidebar' ? 'inpCustomLabelSidebar' : 'inpCustomLabelQuick');
+      const emojiVal = (emojiInp?.value || '🏷️').trim() || '🏷️';
+      const labelVal = (labelInp?.value || '').trim();
+      const all = getAllActiveTrackedObjects();
+      let sel = all.filter(o => selectedTrackedIds.has(o.id));
+      if (sel.length === 0) {
+        sel = [lostPerson];
+        selectedTrackedIds.add(lostPerson.id);
+      }
+      const autoNum = document.getElementById('chkAutoNumberMultiTag')?.checked !== false;
+      sel.forEach((o, idx) => {
+        o.emoji = emojiVal;
+        if (labelVal) {
+          o.label = (sel.length > 1 && autoNum && !labelVal.includes('#')) ? `${labelVal} #${idx + 1}` : labelVal;
+        }
+      });
+      syncEmojiTaggingUI();
+      updateAidBannerUI(`🏷️ Custom Tag Applied to ${sel.length} Object(s): ${sel.map(o => o.emoji + ' ' + o.label).join(', ')}`);
+    }
+
+    function cycleTrackedBadgeDisplayStyle() {
+      trackedBadgeDisplayStyle = trackedBadgeDisplayStyle === 'EMOJI_AND_LABEL' ? 'EMOJI_ONLY_BUBBLE' : 'EMOJI_AND_LABEL';
+      const b1 = document.getElementById('btnToggleBadgeDisplayStyle');
+      const b2 = document.getElementById('btnSidebarBadgeMode');
+      const txt = trackedBadgeDisplayStyle === 'EMOJI_ONLY_BUBBLE' ? '🏳️ Badges: Big Emoji Only' : '💬 Badges: Emoji + Label';
+      if (b1) b1.textContent = txt;
+      if (b2) b2.textContent = txt;
+    }
 
     const drones = [
       { id: 'Drone 1 (Sierra)', shortName: 'Drone 1', color: '#ff9f0a', x: 38,   y: 56,   altAgl: 28, radius: 40, role: 'PRIORITY_FOLLOW', sectorName: 'Following Hiker', waypoints: [], wpIdx: 0, sectorDone: false, trail: [], lastStampX: -9999, lastStampY: -9999 },
@@ -1893,16 +2336,31 @@
     function restartCooperativeSearch() {
       exploredStampList = [];
       boxExploredGrid.fill(0);
-      lostPerson.x = (searchBox.xMin + searchBox.xMax) * 0.5 + 52;
-      lostPerson.y = (searchBox.yMin + searchBox.yMax) * 0.5 + 64;
+      const cx0 = (searchBox.xMin + searchBox.xMax) * 0.5;
+      const cy0 = (searchBox.yMin + searchBox.yMax) * 0.5;
+      lostPerson.x = cx0 + 52;
+      lostPerson.y = cy0 + 64;
       lostPerson.arrived = false;
-      lostVehicle.x = (searchBox.xMin + searchBox.xMax) * 0.5 - 145;
-      lostVehicle.y = (searchBox.yMin + searchBox.yMax) * 0.5 + 95;
+      rescueSearcher1.x = cx0 + 26;
+      rescueSearcher1.y = cy0 + 44;
+      rescueSearcher2.x = cx0 + 37;
+      rescueSearcher2.y = cy0 + 49;
+      rescueK9.x = cx0 + 45;
+      rescueK9.y = cy0 + 53;
+      tripodSentinelNode.x = cx0 + 33;
+      tripodSentinelNode.y = cy0 + 62;
+      wildlifeMoose.x = cx0 + 68;
+      wildlifeMoose.y = cy0 + 41;
+      reconDroneTarget.x = cx0 + 20;
+      reconDroneTarget.y = cy0 + 68;
+      lostVehicle.x = cx0 - 145;
+      lostVehicle.y = cy0 + 95;
       lostVehicle.arrived = false;
       markCircleExplored(AUTIOTUPA_HUT.x, AUTIOTUPA_HUT.y, 34);
       markCircleExplored(PLOWED_ROADHEAD.x, PLOWED_ROADHEAD.y, 34);
 
       recomputeAutoMission(true);
+      syncEmojiTaggingUI();
 
       drones.forEach(d => {
         if (d.role === 'SHROUD_MAPPER' && d.waypoints.length >= 2) {
@@ -2770,6 +3228,7 @@
       activeMapTool = tool;
       const btnDraw = document.getElementById('toolDrawBox');
       const btnPan = document.getElementById('toolPanMap');
+      const btnMulti = document.getElementById('toolMultiSelectTag');
       const btnGoto = document.getElementById('toolGotoPoint');
       const btnTrack = document.getElementById('toolTrackObject');
       const drawBanner = document.getElementById('mapDrawBoxBanner');
@@ -2780,6 +3239,7 @@
         btnDraw.textContent = tool === 'DRAW_BOX' ? '📐 Draw New Box: ON (Drag Map)' : '📐 Draw New Box: OFF';
       }
       if (btnPan) btnPan.classList.toggle('primary', tool === 'PAN_MAP');
+      if (btnMulti) btnMulti.classList.toggle('primary', tool === 'MULTI_SELECT_TAG');
       if (btnGoto) btnGoto.classList.toggle('primary', tool === 'GOTO_POINT');
       if (btnTrack) btnTrack.classList.toggle('primary', tool === 'TRACK_OBJECT');
 
@@ -2790,12 +3250,14 @@
       if (hintPill) {
         if (tool === 'DRAW_BOX') {
           hintPill.innerHTML = '📐 <strong>Draw New Search Box Mode ON:</strong> Drag on the map to define a new Search Area from scratch (or press <strong>Esc</strong> to cancel). Drones will fly from their current positions!';
+        } else if (tool === 'MULTI_SELECT_TAG') {
+          hintPill.innerHTML = '⬚ <strong>Multi-Select Tag Mode ON:</strong> Drag a rectangle across multiple tracked people/objects on the <strong>Map</strong> or <strong>Video</strong> (or Shift+Click) to assign emojis/labels in bulk!';
         } else if (tool === 'GOTO_POINT') {
           hintPill.innerHTML = `📍 <strong>Send ${selDrone.shortName} to Point:</strong> Click anywhere on the <strong>Map</strong> or <strong>Drone Video</strong> (or drag any Drone on the map) to fly it there from its current position!`;
         } else if (tool === 'TRACK_OBJECT') {
           hintPill.innerHTML = `🎯 <strong>Mark Object to Track:</strong> Click any person, vehicle, or terrain object on the <strong>Map</strong> or <strong>Drone Video</strong> to lock &amp; track it!`;
         } else {
-          hintPill.innerHTML = '💡 <strong>Drag any Drone</strong> to fly it to a spot or onto a target  •  <strong>Drag Box handles (◻)</strong> to stretch Search Area  •  Use <strong>🕹️ Trackpad Stick</strong> to steer 1:1!';
+          hintPill.innerHTML = '💡 <strong>Click or drag-select tracked objects</strong> to assign emoji/label tags  •  <strong>Drag any Drone</strong> to fly it  •  <strong>Drag Box handles (◻)</strong> to stretch Search Area!';
         }
       }
       mapCanvas.style.cursor = tool === 'PAN_MAP' ? 'grab' : 'crosshair';
@@ -2820,13 +3282,10 @@
     }
 
     function findSubjectNearWorldPoint(wx, wy, maxRadiusM = 36) {
-      const candidates = [
-        { key: 'PERSON', subj: lostPerson },
-        { key: 'VEHICLE', subj: lostVehicle }
-      ];
-      if (customTrackedObject.active) {
-        candidates.push({ key: 'CUSTOM', subj: customTrackedObject });
-      }
+      const candidates = getAllActiveTrackedObjects().map(subj => ({
+        key: subj.id === 'TGT-SNOWMOBILE-02' ? 'VEHICLE' : (subj.id === 'TGT-HIKER-01' ? 'PERSON' : 'CUSTOM'),
+        subj
+      }));
       let best = null, bestD = maxRadiusM;
       for (const c of candidates) {
         const d = Math.hypot(wx - c.subj.x, wy - c.subj.y);
@@ -3127,8 +3586,29 @@
           return;
         }
 
+        // 0B2. If operator enabled 'MULTI_SELECT_TAG' (or holds Shift), dragging on map draws a Multi-Select Marquee Box!
+        if (e.button === 0 && (activeMapTool === 'MULTI_SELECT_TAG' || e.shiftKey)) {
+          const hitSubj = findSubjectNearWorldPoint(wx, wy, 26 / Math.max(0.15, getMapGeometry().scale));
+          if (hitSubj && e.shiftKey) {
+            toggleSelectTrackedObject(hitSubj.subj.id, e);
+            return;
+          }
+          mapMarqueeSelect = { startCx: cx, startCy: cy, curCx: cx, curCy: cy, active: true, additive: e.shiftKey };
+          pointerDownInfo = { cx, cy, startCx: cx, startCy: cy, wx, wy, isMapMarquee: true };
+          return;
+        }
+
         // 0C. Direct Drone Dragging on Map: Grab any Drone (1..4) and drag it to a target position or onto an object to track!
         if (e.button === 0 && activeMapTool === 'PAN_MAP') {
+          // Clicking directly on any Tracked Person, Rescuer, K9, Vehicle, Animal, Drone, or Tripod selects it for Emoji/Label Tagging!
+          const hitSubj = findSubjectNearWorldPoint(wx, wy, 26 / Math.max(0.15, getMapGeometry().scale));
+          if (hitSubj) {
+            toggleSelectTrackedObject(hitSubj.subj.id, e);
+            if (hitSubj.key === 'PERSON' || hitSubj.key === 'VEHICLE') {
+              reassignTargetLock(hitSubj.key, true);
+            }
+            return;
+          }
           const hitDroneIdx = findDroneAtCanvasPoint(cx, cy);
           if (hitDroneIdx >= 0) {
             selectCameraSource(`DRONE_${hitDroneIdx}`);
@@ -3143,12 +3623,6 @@
             };
             pointerDownInfo = { cx, cy, startCx: cx, startCy: cy, wx, wy };
             mapCanvas.style.cursor = 'grabbing';
-            return;
-          }
-          // Clicking directly on Lost Hiker, Snowmobile, or Marked Object switches target tracking to it!
-          const hitSubj = findSubjectNearWorldPoint(wx, wy, 28 / Math.max(0.15, getMapGeometry().scale));
-          if (hitSubj && (hitSubj.key === 'PERSON' || hitSubj.key === 'VEHICLE')) {
-            reassignTargetLock(hitSubj.key, true);
             return;
           }
         }
@@ -3199,7 +3673,7 @@
             if (dropMarkerMode) {
               hoveredResizeHandle = null;
               mapCanvas.style.cursor = 'crosshair';
-            } else if (activeMapTool === 'DRAW_BOX') {
+            } else if (activeMapTool === 'DRAW_BOX' || activeMapTool === 'MULTI_SELECT_TAG') {
               hoveredResizeHandle = null;
               mapCanvas.style.cursor = 'crosshair';
             } else {
@@ -3217,10 +3691,22 @@
           hoveredResizeHandle = null;
         }
 
+        if (videoMarqueeSelect && videoMarqueeSelect.active && osdCanvas) {
+          const vRect = osdCanvas.getBoundingClientRect();
+          videoMarqueeSelect.curX = (e.clientX - vRect.left) * (osdCanvas.width / Math.max(1, vRect.width));
+          videoMarqueeSelect.curY = (e.clientY - vRect.top) * (osdCanvas.height / Math.max(1, vRect.height));
+        }
+
         if (!pointerDownInfo) return;
         const cx = (e.clientX - rect.left) * (mapCanvas.width / rect.width);
         const cy = (e.clientY - rect.top) * (mapCanvas.height / rect.height);
         const [wx, wy] = canvasToWorld(cx, cy);
+
+        if (pointerDownInfo.isMapMarquee && mapMarqueeSelect) {
+          mapMarqueeSelect.curCx = cx;
+          mapMarqueeSelect.curCy = cy;
+          return;
+        }
 
         // Live dragging of a Drone to a new destination point or onto a target object!
         if (draggingDroneState) {
@@ -3269,11 +3755,57 @@
       });
 
       window.addEventListener('mouseup', e => {
+        if (videoMarqueeSelect && videoMarqueeSelect.active && osdCanvas) {
+          const vm = videoMarqueeSelect;
+          videoMarqueeSelect = null;
+          const dPx = Math.hypot(vm.curX - vm.startX, vm.curY - vm.startY);
+          const dIdx = parseInt(selectedCameraSource.replace('DRONE_', ''), 10) || 0;
+          const fp = getDroneVideoFootprintWorldRect(dIdx, osdCanvas.width, osdCanvas.height);
+          if (dPx > 10) {
+            const x0 = Math.min(vm.startX, vm.curX), x1 = Math.max(vm.startX, vm.curX);
+            const y0 = Math.min(vm.startY, vm.curY), y1 = Math.max(vm.startY, vm.curY);
+            if (!vm.additive) selectedTrackedIds.clear();
+            getAllActiveTrackedObjects().forEach(o => {
+              const vx = ((o.x - fp.xMin) / fp.w) * osdCanvas.width;
+              const vy = ((o.y - fp.yMin) / fp.h) * osdCanvas.height;
+              if (vx >= x0 - 18 && vx <= x1 + 18 && vy >= y0 - 24 && vy <= y1 + 24) {
+                selectedTrackedIds.add(o.id);
+              }
+            });
+            syncEmojiTaggingUI();
+            updateAidBannerUI(`⬚ Multi-Selected ${selectedTrackedIds.size} Tracked Object(s) in Camera View — Click any Emoji/Tag Preset to Assign!`);
+          }
+        }
+
         if (!pointerDownInfo) return;
         const rect = mapCanvas.getBoundingClientRect();
         const cx = (e.clientX - rect.left) * (mapCanvas.width / rect.width);
         const cy = (e.clientY - rect.top) * (mapCanvas.height / rect.height);
         const dragPx = Math.hypot(cx - pointerDownInfo.startCx, cy - pointerDownInfo.startCy);
+
+        if (pointerDownInfo.isMapMarquee && mapMarqueeSelect) {
+          const mm = mapMarqueeSelect;
+          mapMarqueeSelect = null;
+          pointerDownInfo = null;
+          if (dragPx > 8) {
+            const x0 = Math.min(mm.startCx, mm.curCx), x1 = Math.max(mm.startCx, mm.curCx);
+            const y0 = Math.min(mm.startCy, mm.curCy), y1 = Math.max(mm.startCy, mm.curCy);
+            if (!mm.additive) selectedTrackedIds.clear();
+            getAllActiveTrackedObjects().forEach(o => {
+              const [px, py] = worldToCanvas(o.x, o.y);
+              if (px >= x0 - 12 && px <= x1 + 12 && py >= y0 - 12 && py <= y1 + 12) {
+                selectedTrackedIds.add(o.id);
+              }
+            });
+            syncEmojiTaggingUI();
+            updateAidBannerUI(`⬚ Multi-Selected ${selectedTrackedIds.size} Tracked Object(s) on Map — Assign any Emoji or Label!`);
+          } else {
+            const [wx, wy] = canvasToWorld(cx, cy);
+            const hit = findSubjectNearWorldPoint(wx, wy, 28 / Math.max(0.15, getMapGeometry().scale));
+            if (hit) toggleSelectTrackedObject(hit.subj.id, e);
+          }
+          return;
+        }
 
         if (draggingDroneState) {
           const ds = draggingDroneState;
@@ -3387,6 +3919,8 @@
           const rect = osdCanvas.getBoundingClientRect();
           const ux = (e.clientX - rect.left) / rect.width;
           const uy = (e.clientY - rect.top) / rect.height;
+          const vxPx = ux * osdCanvas.width;
+          const vyPx = uy * osdCanvas.height;
 
           if (selectedCameraSource === 'QUAD_4UP') {
             const qIdx = (uy < 0.5 ? 0 : 2) + (ux < 0.5 ? 0 : 1);
@@ -3407,6 +3941,34 @@
           } else if (activeMapTool === 'TRACK_OBJECT') {
             markOrLockObjectAtWorld(clickWx, clickWy, dIdx);
             setMapTool('PAN_MAP');
+          } else {
+            // Check if operator clicked directly on a tracked person/object or its floating speech-bubble badge in View 2!
+            let hitVideoObj = null;
+            let bestPxDist = 46;
+            getAllActiveTrackedObjects().forEach(o => {
+              const ox = ((o.x - fp.xMin) / fp.w) * osdCanvas.width;
+              const oy = ((o.y - fp.yMin) / fp.h) * osdCanvas.height;
+              const dCenter = Math.hypot(vxPx - ox, vyPx - oy);
+              const dBadge = Math.hypot(vxPx - ox, vyPx - (oy - 44));
+              const dMin = Math.min(dCenter, dBadge);
+              if (dMin < bestPxDist) {
+                bestPxDist = dMin;
+                hitVideoObj = o;
+              }
+            });
+            if (hitVideoObj) {
+              toggleSelectTrackedObject(hitVideoObj.id, e);
+            } else {
+              // Start Marquee Multi-Selection Box Drag in Camera View!
+              videoMarqueeSelect = {
+                startX: vxPx,
+                startY: vyPx,
+                curX: vxPx,
+                curY: vyPx,
+                active: true,
+                additive: e.shiftKey || e.metaKey || e.ctrlKey
+              };
+            }
           }
         });
 
@@ -4205,30 +4767,115 @@
           mapCtx.restore();
         }
 
-        const drawSubject = (subj, color) => {
-          const [tx, ty] = worldToCanvas(subj.x, subj.y);
-          mapCtx.save();
-          mapCtx.strokeStyle = color;
-          mapCtx.lineWidth = 2.2;
-          mapCtx.strokeRect(tx - 11, ty - 11, 22, 22);
-          const tag = subj.arrived ? `✓ ${subj.label} (Safe at Shelter)` : `${subj.label} • ${subj.tempC}`;
-          mapCtx.font = '600 11px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
-          const tw = Math.ceil(mapCtx.measureText(tag).width) + 14;
-          mapCtx.fillStyle = 'rgba(18, 18, 24, 0.92)';
-          mapCtx.beginPath();
-          mapCtx.roundRect(tx - tw * 0.5, ty + 14, tw, 19, 5);
-          mapCtx.fill();
-          mapCtx.strokeStyle = color;
-          mapCtx.stroke();
-          mapCtx.fillStyle = '#ffffff';
-          mapCtx.textAlign = 'center';
-          mapCtx.fillText(tag, tx, ty + 27);
-          mapCtx.restore();
+        // Helper to draw Speech-Bubble Callout Badge with bottom pointer triangle (Screenshot Style!)
+        const drawSpeechBubbleCallout = (ctx2d, cx, topY, emojiStr, labelStr, borderCol, isSel, emojiOnlyMode) => {
+          ctx2d.save();
+          const showOnlyEmoji = emojiOnlyMode;
+          const displayTxt = showOnlyEmoji ? `${emojiStr}` : `${emojiStr} ${labelStr}`;
+          ctx2d.font = showOnlyEmoji
+            ? '700 18px -apple-system, BlinkMacSystemFont, "Apple Color Emoji", sans-serif'
+            : '700 11.5px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
+          const tw = Math.max(showOnlyEmoji ? 34 : 52, Math.ceil(ctx2d.measureText(displayTxt).width) + (showOnlyEmoji ? 16 : 16));
+          const bh = showOnlyEmoji ? 28 : 22;
+          const bx = cx - tw * 0.5;
+          const by = topY - bh - 7;
+
+          ctx2d.fillStyle = isSel ? 'rgba(12, 30, 48, 0.96)' : 'rgba(16, 18, 25, 0.94)';
+          ctx2d.strokeStyle = isSel ? '#38bdf8' : borderCol;
+          ctx2d.lineWidth = isSel ? 2.2 : 1.6;
+
+          // Speech bubble rounded rect + downward pointer triangle
+          const r = 6;
+          ctx2d.beginPath();
+          ctx2d.moveTo(bx + r, by);
+          ctx2d.lineTo(bx + tw - r, by);
+          ctx2d.quadraticCurveTo(bx + tw, by, bx + tw, by + r);
+          ctx2d.lineTo(bx + tw, by + bh - r);
+          ctx2d.quadraticCurveTo(bx + tw, by + bh, bx + tw - r, by + bh);
+          ctx2d.lineTo(cx + 6, by + bh);
+          ctx2d.lineTo(cx, by + bh + 7);
+          ctx2d.lineTo(cx - 6, by + bh);
+          ctx2d.lineTo(bx + r, by + bh);
+          ctx2d.quadraticCurveTo(bx, by + bh, bx, by + bh - r);
+          ctx2d.lineTo(bx, by + r);
+          ctx2d.quadraticCurveTo(bx, by, bx + r, by);
+          ctx2d.closePath();
+          ctx2d.fill();
+          ctx2d.stroke();
+
+          ctx2d.fillStyle = '#ffffff';
+          ctx2d.textAlign = 'center';
+          ctx2d.textBaseline = 'middle';
+          ctx2d.fillText(displayTxt, cx, by + bh * 0.5 + 0.5);
+          ctx2d.restore();
         };
-        drawSubject(lostPerson, '#ff453a');
-        drawSubject(lostVehicle, '#ff9f0a');
-        if (customTrackedObject && customTrackedObject.active) {
-          drawSubject(customTrackedObject, '#ffd60a');
+
+        const drawSubjectOnMap = (subj) => {
+          const [tx, ty] = worldToCanvas(subj.x, subj.y);
+          const isSel = selectedTrackedIds.has(subj.id);
+          const color = subj.badgeColor || '#ff453a';
+          mapCtx.save();
+          if (isSel) {
+            mapCtx.strokeStyle = '#38bdf8';
+            mapCtx.lineWidth = 2.4;
+            mapCtx.setLineDash([4, 3]);
+            mapCtx.strokeRect(tx - 14, ty - 14, 28, 28);
+            mapCtx.setLineDash([]);
+          }
+          mapCtx.strokeStyle = color;
+          mapCtx.lineWidth = 2.0;
+          mapCtx.strokeRect(tx - 10, ty - 10, 20, 20);
+          mapCtx.restore();
+
+          drawSpeechBubbleCallout(
+            mapCtx,
+            tx,
+            ty - 11,
+            subj.emoji || '🏷️',
+            subj.arrived ? `${subj.label} ✓` : subj.label,
+            color,
+            isSel,
+            trackedBadgeDisplayStyle === 'EMOJI_ONLY_BUBBLE'
+          );
+        };
+
+        getAllActiveTrackedObjects().forEach(subj => drawSubjectOnMap(subj));
+
+        if (tripodRidgeNodeA1 && tripodRidgeNodeA1.active && tripodSentinelNode && tripodSentinelNode.active) {
+          const [a2x, a2y] = worldToCanvas(tripodSentinelNode.x, tripodSentinelNode.y);
+          const [a1x, a1y] = worldToCanvas(tripodRidgeNodeA1.x, tripodRidgeNodeA1.y);
+          const [bx, by] = worldToCanvas(PLOWED_ROADHEAD.x, PLOWED_ROADHEAD.y);
+          mapCtx.save();
+          mapCtx.strokeStyle = '#34d399';
+          mapCtx.lineWidth = 2.4;
+          mapCtx.setLineDash([6, 4]);
+          mapCtx.beginPath();
+          mapCtx.moveTo(a2x, a2y);
+          mapCtx.lineTo(a1x, a1y);
+          mapCtx.lineTo(bx, by);
+          mapCtx.stroke();
+          mapCtx.setLineDash([]);
+          mapCtx.font = '700 10px -apple-system, BlinkMacSystemFont, "SF Mono", monospace';
+          mapCtx.fillStyle = '#34d399';
+          mapCtx.textAlign = 'center';
+          mapCtx.fillText('HOP 1 (915 MHz + 2.4G +17.9 dB)', (a2x + a1x) * 0.5, (a2y + a1y) * 0.5 - 8);
+          mapCtx.fillText('HOP 2 (+14.3 dB -> BASE)', (a1x + bx) * 0.5, (a1y + by) * 0.5 - 8);
+          mapCtx.restore();
+        }
+
+        if (mapMarqueeSelect && mapMarqueeSelect.active) {
+          const mx0 = Math.min(mapMarqueeSelect.startCx, mapMarqueeSelect.curCx);
+          const my0 = Math.min(mapMarqueeSelect.startCy, mapMarqueeSelect.curCy);
+          const mw = Math.abs(mapMarqueeSelect.curCx - mapMarqueeSelect.startCx);
+          const mh = Math.abs(mapMarqueeSelect.curCy - mapMarqueeSelect.startCy);
+          mapCtx.save();
+          mapCtx.fillStyle = 'rgba(56, 189, 248, 0.18)';
+          mapCtx.strokeStyle = '#38bdf8';
+          mapCtx.lineWidth = 2.0;
+          mapCtx.setLineDash([5, 4]);
+          mapCtx.fillRect(mx0, my0, mw, mh);
+          mapCtx.strokeRect(mx0, my0, mw, mh);
+          mapCtx.restore();
         }
       }
 
@@ -4311,38 +4958,125 @@
         ((wy - fp.yMin) / fp.h) * H
       ];
 
-      const subjectsInVideo = (customTrackedObject && customTrackedObject.active) ? [lostPerson, lostVehicle, customTrackedObject] : [lostPerson, lostVehicle];
+      const subjectsInVideo = getAllActiveTrackedObjects();
       subjectsInVideo.forEach(subj => {
-        if (subj.x >= fp.xMin && subj.x <= fp.xMax && subj.y >= fp.yMin && subj.y <= fp.yMax) {
+        if (subj.x >= fp.xMin - 8 && subj.x <= fp.xMax + 8 && subj.y >= fp.yMin - 8 && subj.y <= fp.yMax + 8) {
           const [vx, vy] = worldToVideoPx(subj.x, subj.y);
-          const subjGrad = ctx.createRadialGradient(vx, vy, 2, vx, vy, 16);
+          const isSel = selectedTrackedIds.has(subj.id);
+          const col = subj.badgeColor || '#ffd60a';
+
+          // Thermal / target signature glow + human/object silhouette figure
+          const subjGrad = ctx.createRadialGradient(vx, vy, 2, vx, vy, 15);
           subjGrad.addColorStop(0, '#ffffff');
-          subjGrad.addColorStop(0.45, '#ff9f0a');
+          subjGrad.addColorStop(0.45, col);
           subjGrad.addColorStop(1, 'rgba(255, 69, 58, 0.0)');
           ctx.fillStyle = subjGrad;
           ctx.beginPath();
-          ctx.arc(vx, vy, 16, 0, Math.PI * 2);
+          ctx.arc(vx, vy, 15, 0, Math.PI * 2);
           ctx.fill();
 
-          const bSize = isCompactQuad ? 44 : 62;
-          ctx.strokeStyle = '#ffd60a';
+          // Crisp walking silhouette / icon at target center
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(vx, vy - 5, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
           ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.moveTo(vx, vy - 1); ctx.lineTo(vx, vy + 7);
+          ctx.moveTo(vx - 4, vy + 2); ctx.lineTo(vx + 4, vy + 2);
+          ctx.moveTo(vx, vy + 7); ctx.lineTo(vx - 3.5, vy + 13);
+          ctx.moveTo(vx, vy + 7); ctx.lineTo(vx + 3.5, vy + 13);
+          ctx.stroke();
+
+          const bSize = isCompactQuad ? 36 : 46;
+          if (isSel) {
+            ctx.save();
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 2.6;
+            ctx.setLineDash([5, 3]);
+            ctx.strokeRect(vx - bSize * 0.5 - 4, vy - bSize * 0.5 - 4, bSize + 8, bSize + 8);
+            ctx.restore();
+          }
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 2.0;
           ctx.strokeRect(vx - bSize * 0.5, vy - bSize * 0.5, bSize, bSize);
 
+          // Render Floating Speech-Bubble Emoji / Short-Label Callout directly above the tracked person/object!
+          const emojiOnly = trackedBadgeDisplayStyle === 'EMOJI_ONLY_BUBBLE';
+          const dispText = emojiOnly ? `${subj.emoji || '🏷️'}` : `${subj.emoji || '🏷️'} ${subj.label}`;
+          ctx.save();
+          ctx.font = emojiOnly
+            ? (isCompactQuad ? '700 16px sans-serif' : '700 22px -apple-system, BlinkMacSystemFont, "Apple Color Emoji", sans-serif')
+            : (isCompactQuad ? '600 10.5px sans-serif' : '700 12.5px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif');
+          const lw = Math.max(emojiOnly ? 38 : 58, Math.ceil(ctx.measureText(dispText).width) + (emojiOnly ? 18 : 18));
+          const lh = emojiOnly ? (isCompactQuad ? 24 : 32) : (isCompactQuad ? 20 : 25);
+          const bx = vx - lw * 0.5;
+          const by = vy - bSize * 0.5 - lh - 9;
+          const r = 7;
+
+          ctx.fillStyle = isSel ? 'rgba(12, 32, 54, 0.96)' : 'rgba(15, 17, 24, 0.94)';
+          ctx.strokeStyle = isSel ? '#38bdf8' : col;
+          ctx.lineWidth = isSel ? 2.4 : 1.8;
+
+          ctx.beginPath();
+          ctx.moveTo(bx + r, by);
+          ctx.lineTo(bx + lw - r, by);
+          ctx.quadraticCurveTo(bx + lw, by, bx + lw, by + r);
+          ctx.lineTo(bx + lw, by + lh - r);
+          ctx.quadraticCurveTo(bx + lw, by + lh, bx + lw - r, by + lh);
+          ctx.lineTo(vx + 7, by + lh);
+          ctx.lineTo(vx, by + lh + 8);
+          ctx.lineTo(vx - 7, by + lh);
+          ctx.lineTo(bx + r, by + lh);
+          ctx.quadraticCurveTo(bx, by + lh, bx, by + lh - r);
+          ctx.lineTo(bx, by + r);
+          ctx.quadraticCurveTo(bx, by, bx + r, by);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(dispText, vx, by + lh * 0.5 + 0.5);
+
+          // Small thermal / sensor sub-pill at bottom of bounding box
           if (!isCompactQuad) {
-            const lbl = `${subj.label} • ${subj.tempC}`;
-            ctx.font = '600 11.5px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
-            const lw = Math.ceil(ctx.measureText(lbl).width) + 14;
-            ctx.fillStyle = 'rgba(15, 16, 22, 0.90)';
-            ctx.beginPath();
-            ctx.roundRect(vx - lw * 0.5, vy - bSize * 0.5 - 24, lw, 20, 5);
-            ctx.fill();
-            ctx.fillStyle = '#ffd60a';
-            ctx.textAlign = 'center';
-            ctx.fillText(lbl, vx, vy - bSize * 0.5 - 10);
+            ctx.font = '600 9.5px "SF Mono", Menlo, monospace';
+            const subTxt = isSel ? `✓ SELECTED • ${subj.tempC}` : subj.tempC;
+            const sw = Math.ceil(ctx.measureText(subTxt).width) + 10;
+            ctx.fillStyle = 'rgba(10, 12, 18, 0.88)';
+            ctx.fillRect(vx - sw * 0.5, vy + bSize * 0.5 + 3, sw, 14);
+            ctx.fillStyle = isSel ? '#38bdf8' : col;
+            ctx.fillText(subTxt, vx, vy + bSize * 0.5 + 10);
           }
+          ctx.restore();
         }
       });
+
+      // Draw Live Marquee Multi-Select Rectangle in Camera View when dragging!
+      if (!isCompactQuad && videoMarqueeSelect && videoMarqueeSelect.active) {
+        const mx0 = Math.min(videoMarqueeSelect.startX, videoMarqueeSelect.curX);
+        const my0 = Math.min(videoMarqueeSelect.startY, videoMarqueeSelect.curY);
+        const mw = Math.abs(videoMarqueeSelect.curX - videoMarqueeSelect.startX);
+        const mh = Math.abs(videoMarqueeSelect.curY - videoMarqueeSelect.startY);
+        if (mw > 4 || mh > 4) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.18)';
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2.2;
+          ctx.setLineDash([6, 4]);
+          ctx.fillRect(mx0, my0, mw, mh);
+          ctx.strokeRect(mx0, my0, mw, mh);
+          ctx.setLineDash([]);
+          ctx.fillStyle = '#38bdf8';
+          ctx.font = '700 11px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText('⬚ Multi-Select Drag (Release to select targets & assign emoji/tag)', mx0 + 6, Math.max(16, my0 - 6));
+          ctx.restore();
+        }
+      }
 
       if (payloadState.status !== 'READY_ABOARD') {
         const [px, py] = worldToVideoPx(payloadState.targetX, payloadState.targetY);
