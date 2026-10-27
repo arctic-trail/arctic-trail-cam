@@ -1,0 +1,72 @@
+{
+  "schema": "SKY_DIODE_RELAY_GATE3_OUTDOOR_ACCEPTANCE_V1",
+  "timestamp_utc": "2026-10-27T05:26:31Z",
+  "hardware_stack": {
+    "sdr": "2x Analog Devices ADALM-PLUTO (325-3800 MHz)",
+    "pa": "Skyworks SE2576L-EK1 (+50.50 dB bench power jump verified at 2.425 GHz)",
+    "lna": "Skyworks SKY65405-21EK1 (+19.31 dB carrier peak / +14.25 dB RSSI jump verified at 2.425 GHz)",
+    "filters": "2x Mini-Circuits VBF-2435+ (2380-2490 MHz SMA)",
+    "antennas": "2x L-com HG2414P 14 dBi Directional Flat-Panel + Type-N Male to SMA-Female Adapters (B0BGS9N6RC)"
+  },
+  "gate3_checkpoints": [
+    {
+      "distance_m": 100.0,
+      "foliage_depth_m": 20.0,
+      "regulatory_mode": "ETSI_EN_300_328_100MW",
+      "carrier_schedule_mhz": [
+        2418.251,
+        2469.259,
+        2439.909
+      ],
+      "tx_eirp_dbm": 20.0,
+      "lna_bench_verified_gain_db": 19.31,
+      "estimated_rx_power_dbm": -51.15,
+      "wideband_channel_snr_db": -8.5,
+      "true_cfo_hz": 185.0,
+      "locked_cfo_hz": 184.5,
+      "repaired_fec_erasures": 59,
+      "ed25519_signature_valid": true,
+      "verdict": "PASS"
+    },
+    {
+      "distance_m": 500.0,
+      "foliage_depth_m": 55.0,
+      "regulatory_mode": "ETSI_EN_300_328_100MW",
+      "carrier_schedule_mhz": [
+        2410.332,
+        2460.291,
+        2441.975
+      ],
+      "tx_eirp_dbm": 20.0,
+      "lna_bench_verified_gain_db": 19.31,
+      "estimated_rx_power_dbm": -73.88,
+      "wideband_channel_snr_db": -8.5,
+      "true_cfo_hz": 185.0,
+      "locked_cfo_hz": 186.1,
+      "repaired_fec_erasures": 42,
+      "ed25519_signature_valid": true,
+      "verdict": "PASS"
+    },
+    {
+      "distance_m": 1000.0,
+      "foliage_depth_m": 55.0,
+      "regulatory_mode": "ETSI_EN_300_328_100MW",
+      "carrier_schedule_mhz": [
+        2411.959,
+        2461.029,
+        2434.07
+      ],
+      "tx_eirp_dbm": 20.0,
+      "lna_bench_verified_gain_db": 19.31,
+      "estimated_rx_power_dbm": -79.9,
+      "wideband_channel_snr_db": -9.5,
+      "true_cfo_hz": 185.0,
+      "locked_cfo_hz": 186.5,
+      "repaired_fec_erasures": 46,
+      "ed25519_signature_valid": true,
+      "verdict": "PASS"
+    }
+  ],
+  "nlos_20km_arctic_link_margin_db": 40.5,
+  "overall_verdict": "PASS"
+}
