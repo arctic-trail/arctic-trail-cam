@@ -23,6 +23,7 @@
 | [`collector_hub/ui/index.html`](collector_hub/ui/index.html) | Browser dashboard rendering verified JPEGs (`/alerts/<file>.jpg`) and AI bounding-box overlays alongside 3D terrain telemetry. |
 | [`collector_hub/subghz_nlos_relay.py`](collector_hub/subghz_nlos_relay.py) | One-way Sub-GHz (`868 MHz` EU / `915 MHz` US) FHSS / LoRa woods-vault-to-farmhouse bridge (`--mode tx-vault` / `--mode rx-farmhouse`). |
 | [`run_guided_bench_doctor.py`](run_guided_bench_doctor.py) | Automated benchtop hardware doctor (`--self-test`, `--start-hub`, `--open-browser`): probes Pico 2 USB/`I2C0` (`0x0d`), checks Pi SSH & camera, prints pin-exact breadboard hole troubleshooting (`Hole j5`, `Hole j3`, `Hole a6`, `Hole a7`, `Hole a11`, `Hole a4`, `Hole a13`, `Hole f24`–`Hole f27`), and launches the Collector Hub + Live Dashboard. |
+| [`run_freezer_soak_acceptance.py`](run_freezer_soak_acceptance.py) | Stage 5 `-18 °C` freezer soak & cold-start acceptance runner (`--self-test`, `--journal-dir`, `--max-temp-c -10.0`, `--min-frames 5`): audits `Ed25519` `.sig.json` receipts, `SHA-256` JPEG integrity, `TEMP=` telemetry, and fail-closed production key enforcement. |
 | [`run_mock_demo.py`](run_mock_demo.py) | Self-contained synthetic end-to-end verification of `Ed25519` signing, 8-byte `nonce` chunking, and UDP reconstruction. |
 
 ---
@@ -42,5 +43,9 @@ python3 collector_hub/receiver_hub.py --verify-bundle ./dead_drop_alerts_export.
 # 3. Provision Unique Production Ed25519 Node Keys & Fast-Boot Service on Raspberry Pi 5:
 python3 pi5_sender_node/generate_keys.py CAMERA-NORTH-01
 sudo bash pi5_sender_node/install_pi5_fastboot.sh CAMERA-NORTH-01
+
+# 4. Run Stage 5 -18 °C Freezer Soak Acceptance Audit:
+python3 run_freezer_soak_acceptance.py --self-test
+python3 run_freezer_soak_acceptance.py --journal-dir ./verified_alerts --max-temp-c -10.0 --min-frames 5
 ```
 

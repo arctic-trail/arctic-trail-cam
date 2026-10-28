@@ -28,6 +28,7 @@ for p in [COLLECTOR_DIR, SENDER_DIR, SKY_TX_DIR, SKY_RX_DIR]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
+os.environ.setdefault("ALLOW_EXAMPLE_KEYS", "1")
 import receiver_hub
 import subghz_nlos_relay
 import sender_node
@@ -169,13 +170,25 @@ class TestQualityAssessmentRemediations(unittest.TestCase):
         self.assertEqual([r["seq"] for r in collected], list(range(250)))
 
     def test_03_example_signing_keys_rejected_in_production_mode(self):
-        """Finding #3: Provisioning a real node with ALLOW_EXAMPLE_KEYS=0 rejects public example keys on both ends."""
+        """Finding #3: Unset ALLOW_EXAMPLE_KEYS (default fail-closed) or ALLOW_EXAMPLE_KEYS=0 rejects public example keys on both ends."""
         real_sk = SigningKey.generate()
         real_pub_hex = real_sk.verify_key.encode().hex()
         reg_file = os.path.join(self.save_dir, "authorized_nodes.json")
         with open(reg_file, "w", encoding="utf-8") as f:
             json.dump({"CAMERA-REAL-01": real_pub_hex}, f)
 
+        # 1. Verify fail-closed when ALLOW_EXAMPLE_KEYS is completely UNSET
+        os.environ.pop("ALLOW_EXAMPLE_KEYS", None)
+        with self.assertRaises(RuntimeError):
+            sender_node.load_signing_key(key_file="/nonexistent/key.json")
+        with self.assertRaises(RuntimeError):
+            subghz_nlos_relay._load_relay_signing_key_hex()
+
+        receiver_hub.load_authorized_nodes(self.save_dir)
+        self.assertIn("CAMERA-REAL-01", receiver_hub.KNOWN_NODE_PUBKEYS)
+        self.assertNotIn("NODE-NORTH-01", receiver_hub.KNOWN_NODE_PUBKEYS)
+
+        # 2. Verify explicit ALLOW_EXAMPLE_KEYS=0 also rejects example keys
         os.environ["ALLOW_EXAMPLE_KEYS"] = "0"
         receiver_hub.load_authorized_nodes(self.save_dir, allow_example_keys=False)
 

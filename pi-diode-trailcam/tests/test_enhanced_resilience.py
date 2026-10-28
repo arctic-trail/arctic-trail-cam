@@ -15,6 +15,7 @@ import secrets
 from nacl.signing import SigningKey
 
 # Import receiver components directly
+os.environ.setdefault("ALLOW_EXAMPLE_KEYS", "1")
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../collector_hub")))
 import receiver_hub
 

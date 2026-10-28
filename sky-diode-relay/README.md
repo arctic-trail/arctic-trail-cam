@@ -1,7 +1,7 @@
 # All-Weather `200 m – 20 km` Non-Line-of-Sight Troposcatter & Optical Relay (`sky-diode-relay`)
 
 > [!IMPORTANT]
-> **ORDERED PRODUCTION BASELINE (`Build D`) & VERIFICATION SCOPE:** This package provides the baseband codec, `VK7MO` lock-in DSP engine, `RP2040/RP2350` PIO state machines, `StoreAndForwardQueue` (`5s–300s` durable disk retry spool), `PlutoSDRTransmitter` / `PlutoSDRReceiver` (`pyadi-iio` `ADALM-PLUTO` SDR hardware drivers), and Monte-Carlo atmospheric/quantum channel models for a **`200 m – 20 km` Non-Line-of-Sight (NLOS)** one-way relay (`24/24` automated software, codec, FEC, regulatory-compliance, and channel-simulation tests passing).
+> **ORDERED PRODUCTION BASELINE (`Build D`) & VERIFICATION SCOPE:** This package provides the baseband codec, `VK7MO` lock-in DSP engine, `RP2040/RP2350` PIO state machines, `StoreAndForwardQueue` (`5s–300s` durable disk retry spool), `PlutoSDRTransmitter` / `PlutoSDRReceiver` (`pyadi-iio` `ADALM-PLUTO` SDR hardware drivers), and Monte-Carlo atmospheric/quantum channel models for a **`200 m – 20 km` Non-Line-of-Sight (NLOS)** one-way relay (`25/25` automated software, codec, FEC, regulatory-compliance, and channel-simulation tests passing, plus live `L5` indoor `2.425 GHz` RF chain verification across `2× ADALM-PLUTO` SDRs + `Skyworks SKY65405-21EK1` LNA `+19.31 dB` jump + `Skyworks SE2576L-EK1` `1 W` PA `+50.50 dB` jump).
 > * **Primary Ordered Hardware (`Build D` — `$1,341.94` Parts Subtotal for `1 Complete TX + RX Link Pair` [`10 DigiKey SKUs / 20 individual part pieces`]):** `2.4 GHz` All-Weather Troposcatter, Hydrometeor (Rain/Snow) Scatter & Forest-Canopy Bounce using **Analog Devices `ADALM-PLUTO` SDRs**, **Skyworks `SE2576L-EK1` (`1 W` / `+30 dBm` PA, `PA_EN` driven strictly at `3.3 V` from `Pico 2 GP3`)**, **Skyworks `SKY65405-21EK1` (`1.2 dB NF` LNA, `VEN` driven strictly at `3.3 V` from `Pico 2 3V3_OUT`)**, **Mini-Circuits `VBF-2435+` (`2370–2500 MHz`) Coaxial Filters**, **vertical mast-mounted `Hammond 1590Z120` (`125 × 80 × 57 mm`, taller-than-wide) `IP66` Cast-Aluminum RF Shield Boxes**, and **L-com `HG2414P` (`14 dBi`, `216 × 216 × 28 mm`) Outdoor Flat-Panel Antennas**.
 > * **⚠️ RF Regulatory Disclaimer (Traficom / EU ETSI EN 300 328) & `--civilian-eu-compliant` Flag:**
 >   * **Default `Build D` Mode (`Licensed / Test-Permit / Amateur Radio / Emergency`):** Operating with the `1.0 W` (`+30 dBm`) external PA and `14 dBi` antenna (`+42.5 dBm` / `17.8 W` EIRP) or hopping into out-of-ISM guard bands (`2370–2400 MHz` / `2483.5–2500 MHz`) **requires a Traficom experimental/test license, public-safety / emergency authority permit, or Amateur Radio permit (`13 cm` band, `2300–2450 MHz`)**.
@@ -53,16 +53,18 @@ Unlike simplified conceptual flowcharts that draw all 5 logical stages inside a 
 | **ITU-R P.617 Troposcatter, Etendue ($A\Omega$) & 6-Layer Anti-Jamming Physics** | [Physical theory and link budget](docs/PHYSICAL_THEORY_AND_LINK_BUDGET.md) |
 | **8-PPM / Keyed-FHSS `VK7MO` Transmitter, Hamming(8,4) FEC & PIO Driver** | [`transmitter/sky_transmitter.py`](transmitter/sky_transmitter.py) and [`transmitter/pio_pulse_modulator.pio`](transmitter/pio_pulse_modulator.pio) |
 | **Barrage-Rejecting Lock-In Receiver, 2D Costas CFO, DLL & TDC PIO** | [`receiver/sky_receiver.py`](receiver/sky_receiver.py) and [`receiver/pio_pulse_receiver.pio`](receiver/pio_pulse_receiver.pio) |
-| **24-Test All-Weather Troposcatter, RF Interference Immunity, Civilian-EU Mode & FEC Suite** | [`tests/test_sky_relay_simulation.py`](tests/test_sky_relay_simulation.py) |
+| **25-Test All-Weather Troposcatter, RF Interference Immunity, Civilian-EU Mode & FEC Suite** | [`tests/test_sky_relay_simulation.py`](tests/test_sky_relay_simulation.py) |
+| **Gate 3 Outdoor Directional Range (`100 m / 500 m / 1,000 m`) Acceptance Harness** | [`run_gate3_outdoor_range_acceptance.py`](run_gate3_outdoor_range_acceptance.py) and [`gate3_outdoor_range_report.json`](gate3_outdoor_range_report.json) |
 
 ---
 
-## Implemented & Verified Capabilities (`24/24` Tests Passing)
+## Implemented & Verified Capabilities (`25/25` Tests Passing + Gate 3 Range Harness)
 
-Run the complete `sky-diode-relay` verification suite (or invoke Peacetime Civilian EU/Traficom `100 mW` mode) from the repository root:
+Run the complete `sky-diode-relay` verification suite and Gate 3 directional range acceptance harness (or invoke Peacetime Civilian EU/Traficom `100 mW` mode) from the repository root:
 
 ```bash
 python3 -B sky-diode-relay/tests/test_sky_relay_simulation.py
+python3 -B sky-diode-relay/run_gate3_outdoor_range_acceptance.py --self-test
 python3 -B sky-diode-relay/transmitter/sky_transmitter.py --civilian-eu-compliant
 ```
 

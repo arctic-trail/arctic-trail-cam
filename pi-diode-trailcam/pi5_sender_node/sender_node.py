@@ -82,22 +82,22 @@ def load_signing_key(key_file=None, allow_example_keys=None):
                 raise RuntimeError(f"Invalid node_key.json ({kf}): {e}") from e
 
     if allow_example_keys is None:
-        allow_example = os.getenv("ALLOW_EXAMPLE_KEYS", "1") != "0"
+        allow_example = os.getenv("ALLOW_EXAMPLE_KEYS", "0").strip().lower() in ("1", "true", "yes")
     else:
         allow_example = bool(allow_example_keys)
 
     if not priv_hex:
         if not allow_example:
             raise RuntimeError(
-                "No node private key provisioned and ALLOW_EXAMPLE_KEYS=0. "
-                "Provision a unique key with generate_keys.py."
+                "No node private key provisioned and ALLOW_EXAMPLE_KEYS is not enabled. "
+                "Provision a unique key with generate_keys.py (or set ALLOW_EXAMPLE_KEYS=1 for isolated bench testing)."
             )
         priv_hex = DEFAULT_EXAMPLE_PRIVKEY_HEX
 
     if priv_hex.lower() == DEFAULT_EXAMPLE_PRIVKEY_HEX.lower():
         if not allow_example:
             raise RuntimeError(
-                "Refusing to sign with default example key while ALLOW_EXAMPLE_KEYS=0. "
+                "Refusing to sign with default example key while ALLOW_EXAMPLE_KEYS is not enabled. "
                 "Provision a unique key with generate_keys.py."
             )
         print("[!] SECURITY NOTICE: Using default benchtop example key. Provision unique keys before deployment.", file=sys.stderr)

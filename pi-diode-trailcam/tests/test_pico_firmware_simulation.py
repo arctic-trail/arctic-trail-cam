@@ -9,6 +9,9 @@ Verifies:
 """
 import struct
 import math
+import os
+
+os.environ.setdefault("ALLOW_EXAMPLE_KEYS", "1")
 
 def test_radar_packet_unpack():
     print("[*] Testing HLK-LD2450 30-byte full frame unpacking (with 0x55 0xCC footer & 3 target slots)...")

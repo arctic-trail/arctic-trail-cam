@@ -105,8 +105,8 @@ def _load_relay_signing_key_hex(explicit_hex=None):
                     return data["private_key_hex"]
             except Exception:
                 pass
-    if os.getenv("ALLOW_EXAMPLE_KEYS", "1") == "0":
-        raise RuntimeError("No relay signing key provisioned while ALLOW_EXAMPLE_KEYS=0")
+    if os.getenv("ALLOW_EXAMPLE_KEYS", "0").strip().lower() not in ("1", "true", "yes"):
+        raise RuntimeError("No relay signing key provisioned while ALLOW_EXAMPLE_KEYS is not enabled")
     return "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 
 
