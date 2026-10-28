@@ -1,6 +1,9 @@
-# Ignore private personal data, orders, and receipts
+# Ignore private personal data, orders, receipts, and custom PCB outputs
 _private/
 pi-diode-trailcam/_private/
+*.kicad_pcb
+*.gbr
+*.drl
 
 # Ignore Python virtual environment and bytecode
 .venv/

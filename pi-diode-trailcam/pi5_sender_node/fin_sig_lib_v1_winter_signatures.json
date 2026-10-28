@@ -27,7 +27,7 @@
     },
     {
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "f0_hz": 1950.0,
       "harmonic_ratio_h2_h1": 0.25,
       "esc_pwm_8_16khz_snr_db": 2.0,
@@ -1577,7 +1577,7 @@
     {
       "sample_id": "FINSIG-W26-03-001",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1942.16,
         "harmonic_ratio_h2_h1": 0.266,
@@ -1596,7 +1596,7 @@
     {
       "sample_id": "FINSIG-W26-03-002",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1942.93,
         "harmonic_ratio_h2_h1": 0.318,
@@ -1615,7 +1615,7 @@
     {
       "sample_id": "FINSIG-W26-03-003",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1958.41,
         "harmonic_ratio_h2_h1": 0.15,
@@ -1634,7 +1634,7 @@
     {
       "sample_id": "FINSIG-W26-03-004",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1952.55,
         "harmonic_ratio_h2_h1": 0.252,
@@ -1653,7 +1653,7 @@
     {
       "sample_id": "FINSIG-W26-03-005",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1935.35,
         "harmonic_ratio_h2_h1": 0.298,
@@ -1672,7 +1672,7 @@
     {
       "sample_id": "FINSIG-W26-03-006",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1950.32,
         "harmonic_ratio_h2_h1": 0.246,
@@ -1691,7 +1691,7 @@
     {
       "sample_id": "FINSIG-W26-03-007",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1959.98,
         "harmonic_ratio_h2_h1": 0.293,
@@ -1710,7 +1710,7 @@
     {
       "sample_id": "FINSIG-W26-03-008",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1949.56,
         "harmonic_ratio_h2_h1": 0.251,
@@ -1729,7 +1729,7 @@
     {
       "sample_id": "FINSIG-W26-03-009",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1932.2,
         "harmonic_ratio_h2_h1": 0.08,
@@ -1748,7 +1748,7 @@
     {
       "sample_id": "FINSIG-W26-03-010",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1939.49,
         "harmonic_ratio_h2_h1": 0.235,
@@ -1767,7 +1767,7 @@
     {
       "sample_id": "FINSIG-W26-03-011",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1965.94,
         "harmonic_ratio_h2_h1": 0.184,
@@ -1786,7 +1786,7 @@
     {
       "sample_id": "FINSIG-W26-03-012",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1967.24,
         "harmonic_ratio_h2_h1": 0.258,
@@ -1805,7 +1805,7 @@
     {
       "sample_id": "FINSIG-W26-03-013",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1958.77,
         "harmonic_ratio_h2_h1": 0.275,
@@ -1824,7 +1824,7 @@
     {
       "sample_id": "FINSIG-W26-03-014",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1948.35,
         "harmonic_ratio_h2_h1": 0.262,
@@ -1843,7 +1843,7 @@
     {
       "sample_id": "FINSIG-W26-03-015",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1937.35,
         "harmonic_ratio_h2_h1": 0.295,
@@ -1862,7 +1862,7 @@
     {
       "sample_id": "FINSIG-W26-03-016",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1962.62,
         "harmonic_ratio_h2_h1": 0.162,
@@ -1881,7 +1881,7 @@
     {
       "sample_id": "FINSIG-W26-03-017",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1949.04,
         "harmonic_ratio_h2_h1": 0.255,
@@ -1900,7 +1900,7 @@
     {
       "sample_id": "FINSIG-W26-03-018",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1926.14,
         "harmonic_ratio_h2_h1": 0.154,
@@ -1919,7 +1919,7 @@
     {
       "sample_id": "FINSIG-W26-03-019",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1951.57,
         "harmonic_ratio_h2_h1": 0.296,
@@ -1938,7 +1938,7 @@
     {
       "sample_id": "FINSIG-W26-03-020",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1965.64,
         "harmonic_ratio_h2_h1": 0.217,
@@ -1957,7 +1957,7 @@
     {
       "sample_id": "FINSIG-W26-03-021",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1947.97,
         "harmonic_ratio_h2_h1": 0.239,
@@ -1976,7 +1976,7 @@
     {
       "sample_id": "FINSIG-W26-03-022",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1952.94,
         "harmonic_ratio_h2_h1": 0.298,
@@ -1995,7 +1995,7 @@
     {
       "sample_id": "FINSIG-W26-03-023",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1952.57,
         "harmonic_ratio_h2_h1": 0.307,
@@ -2014,7 +2014,7 @@
     {
       "sample_id": "FINSIG-W26-03-024",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1927.15,
         "harmonic_ratio_h2_h1": 0.25,
@@ -2033,7 +2033,7 @@
     {
       "sample_id": "FINSIG-W26-03-025",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1961.23,
         "harmonic_ratio_h2_h1": 0.25,
@@ -2052,7 +2052,7 @@
     {
       "sample_id": "FINSIG-W26-03-026",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1933.47,
         "harmonic_ratio_h2_h1": 0.292,
@@ -2071,7 +2071,7 @@
     {
       "sample_id": "FINSIG-W26-03-027",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1962.63,
         "harmonic_ratio_h2_h1": 0.32,
@@ -2090,7 +2090,7 @@
     {
       "sample_id": "FINSIG-W26-03-028",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1930.38,
         "harmonic_ratio_h2_h1": 0.295,
@@ -2109,7 +2109,7 @@
     {
       "sample_id": "FINSIG-W26-03-029",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1963.2,
         "harmonic_ratio_h2_h1": 0.095,
@@ -2128,7 +2128,7 @@
     {
       "sample_id": "FINSIG-W26-03-030",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1966.84,
         "harmonic_ratio_h2_h1": 0.314,
@@ -2147,7 +2147,7 @@
     {
       "sample_id": "FINSIG-W26-03-031",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1943.8,
         "harmonic_ratio_h2_h1": 0.164,
@@ -2166,7 +2166,7 @@
     {
       "sample_id": "FINSIG-W26-03-032",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1936.76,
         "harmonic_ratio_h2_h1": 0.387,
@@ -2185,7 +2185,7 @@
     {
       "sample_id": "FINSIG-W26-03-033",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1939.52,
         "harmonic_ratio_h2_h1": 0.278,
@@ -2204,7 +2204,7 @@
     {
       "sample_id": "FINSIG-W26-03-034",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1931.77,
         "harmonic_ratio_h2_h1": 0.382,
@@ -2223,7 +2223,7 @@
     {
       "sample_id": "FINSIG-W26-03-035",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1946.57,
         "harmonic_ratio_h2_h1": 0.182,
@@ -2242,7 +2242,7 @@
     {
       "sample_id": "FINSIG-W26-03-036",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1971.81,
         "harmonic_ratio_h2_h1": 0.176,
@@ -2261,7 +2261,7 @@
     {
       "sample_id": "FINSIG-W26-03-037",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1947.27,
         "harmonic_ratio_h2_h1": 0.378,
@@ -2280,7 +2280,7 @@
     {
       "sample_id": "FINSIG-W26-03-038",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1943.87,
         "harmonic_ratio_h2_h1": 0.162,
@@ -2299,7 +2299,7 @@
     {
       "sample_id": "FINSIG-W26-03-039",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1954.54,
         "harmonic_ratio_h2_h1": 0.216,
@@ -2318,7 +2318,7 @@
     {
       "sample_id": "FINSIG-W26-03-040",
       "class_index": 2,
-      "class_name": "CLASS_3_MICRO_TURBOJET_AIRCRAFT",
+      "class_name": "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT",
       "features": {
         "f0_hz": 1971.02,
         "harmonic_ratio_h2_h1": 0.234,

@@ -5,7 +5,7 @@
 > * **GitHub Topics:** `raspberry-pi-5` · `rp2350` · `pico-2` · `hailo-8l` · `plutosdr` · `software-defined-radio` · `troposcatter` · `data-diode` · `fiber-optics` · `bvlos` · `acoustic-sensing` · `micro-doppler` · `ed25519` · `edge-ai` · `cots` · `open-hardware` · `trail-camera` · `finland` · `nordic` · `baltic`
 > * **Visual Architecture & Engineering Overview (27-Slide PDF Deck):** [`ARCTIC_TRAIL_CAM_EXECUTIVE_OVERVIEW.pdf`](ARCTIC_TRAIL_CAM_EXECUTIVE_OVERVIEW.pdf)
 > * **Complete Illustrated IKEA-Style Build Manual (PDF Booklet):** [`ARCTIC_TRAIL_CAM_BUILD_AND_FIELD_GUIDE.pdf`](ARCTIC_TRAIL_CAM_BUILD_AND_FIELD_GUIDE.pdf)
-> * **Sister Project (Autonomous Wilderness Search-and-Rescue Drone, Heated Launch Nest & `FIN-LAB-02` `350–400 km/h` Fast-SAR Jet-Hybrid):** [`arctic-trail/karhunkierros-sar-drone`](https://github.com/arctic-trail/karhunkierros-sar-drone)
+> * **Sister Project (Autonomous Wilderness Search-and-Rescue Drone, Heated Launch Nest & Maritime USV Autonomy):** [`arctic-trail/karhunkierros-sar-drone`](https://github.com/arctic-trail/karhunkierros-sar-drone)
 > * **FIN-LAB COTS Airspace-Safety, Maritime & Corridor Enabler Suite (`FIN-SIG-LIB v1.0` `#4`, `[P12-BELT]` & `[P12-URBAN]` Non-RF Corridor/Bridge/Substation Sensing `#7`, `FIN-LAB-06` `1.85 m` Inshore & `FIN-LAB-06B` `3.60 m` Offshore Sea-State-5 Cable-Inspection USVs `#12`, `[P11-COAST-2KM]` `1–2.5 km` Gimbal-Free Optical Strait Bridge, and `[P21-SVALBARD]` Treeless Permafrost Cairn Kit):** [`pi-diode-trailcam/pi5_sender_node/northern_flank_red_gap_solver.py`](pi-diode-trailcam/pi5_sender_node/northern_flank_red_gap_solver.py)
 > * **License:** [`MIT License`](LICENSE)
 

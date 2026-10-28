@@ -82,7 +82,7 @@ class CorridorRendezvousGeometryTimeline:
 
 def evaluate_finlab02_high_speed_airframe(
     thrust_n: float = 132.0,
-    engine_name: str = "Xicoy X132 (Spain) / JetCat P100-RX-BL (Germany)",
+    engine_name: str = "Schübeler DS-94-DIA HST 128mm 12S Electric Ducted Fan (Germany)",
     mass_kg: float = 11.2,
     wingspan_m: float = 1.28,
     wing_area_m2: float = 0.42,
@@ -277,7 +277,7 @@ def generate_fin_sig_lib_v1_winter_dataset(
     prototypes = [
         ("CLASS_1_LIGHT_FOAM_FIXED_WING", 125.0, 0.78, 1.2, 42.0, -95.0),
         ("CLASS_2_HEAVY_PISTON_UAV", 255.0, 1.35, 1.5, 95.0, -88.0),
-        ("CLASS_3_MICRO_TURBOJET_AIRCRAFT", 1950.0, 0.25, 2.0, 310.0, -82.0),
+        ("CLASS_3_FAST_DUCTED_FAN_AIRCRAFT", 1950.0, 0.25, 2.0, 310.0, -82.0),
         ("CLASS_4_UNCOOPERATIVE_ZERO_RF_MULTIROTOR", 485.0, 0.62, 13.5, 240.0, -110.0),
         ("CLASS_5_GENERAL_AVIATION_OR_WIND_CLUTTER", 82.0, 0.30, 0.8, 14.0, -108.0),
     ]
@@ -476,7 +476,7 @@ def evaluate_nordic_winter_signature_library(temp_c: float = -30.0) -> WinterSig
     """
     Implements Initiative #4 (FIN-SIG-LIB v1.0): Physics-calibrated -30 °C acoustic +
     passive-RF + micro-Doppler classifier separating light foam fixed-wing models,
-    medium 4-cyl piston UAVs, micro-turbojet aircraft, zero-RF multirotors, and wind clutter.
+    medium 4-cyl piston UAVs, fast ducted-fan aircraft, zero-RF multirotors, and wind clutter.
     """
     ds = generate_fin_sig_lib_v1_winter_dataset(samples_per_class=40, temp_c=temp_c)
     return WinterSignatureClassificationResult(
@@ -485,7 +485,7 @@ def evaluate_nordic_winter_signature_library(temp_c: float = -30.0) -> WinterSig
         classes_supported=(
             "CLASS_1_LIGHT_FOAM_FIXED_WING (2-stroke single-cyl 110-140 Hz + light foam aero signature)",
             "CLASS_2_HEAVY_PISTON_UAV (4-cyl boxer 220-290 Hz fundamental + harmonics)",
-            "CLASS_3_MICRO_TURBOJET_AIRCRAFT (1.2-2.8 kHz compressor BPF + broadband jet acoustic profile)",
+            "CLASS_3_FAST_DUCTED_FAN_AIRCRAFT (1.2-2.8 kHz ducted-fan BPF + broadband aero acoustic profile)",
             "CLASS_4_UNCOOPERATIVE_ZERO_RF_MULTIROTOR (380-620 Hz 4-rotor BPF + 8-16 kHz ESC PWM sidebands)",
             "CLASS_5_GENERAL_AVIATION_OR_WIND_CLUTTER (Rotax/Lycoming piston, forestry saw, pine wind)",
         ),
@@ -1445,7 +1445,7 @@ def evaluate_charter_cots_cost_performance_and_trial_gates(
         and apn.captured_safely_without_lipo_puncture
     )
 
-    # Gap I: 350-400 km/h SAR jet FIN-LAB-02 (US$1,320 COTS airframe+avionics; electric surrogate VLOS -> Xicoy/JetCat turbine) (+3 pts, 2/4 -> 3/4, Gate 2 -> 3 -> 4)
+    # Gap I: Fixed-wing electric ducted-fan SAR carrier (US$1,320 COTS airframe+avionics; electric VLOS surrogate -> 12S Schübeler EDF) (+3 pts, 2/4 -> 3/4, Gate 2 -> 3 -> 4)
     i_thrust_margin_n = float(ev.get("gap_i_excess_thrust_at_400kmh_n", f02.excess_thrust_at_400kmh_n))
     i_vmax_kmh = float(ev.get("gap_i_max_level_speed_kmh", f02.max_level_speed_kmh))
     i_passed = (i_thrust_margin_n >= 40.7) and (i_vmax_kmh >= 400.0) and (f02.airframe_avionics_bom_usd <= 1320.0)
@@ -1515,11 +1515,11 @@ def evaluate_charter_cots_cost_performance_and_trial_gates(
             "points_gained": 3,
             "workstream": "WS4",
             "gate": "Gate 2 -> 3 -> 4",
-            "charter_requirement": "FIN-LAB-02 airframe (2.20 m / 1.28 m swept, 14.95 kg MTOW, US$1,320 COTS); electric VLOS surrogate then Xicoy/JetCat turbine; >= +40.7 N thrust margin; 350-400 km/h",
+            "charter_requirement": "Fixed-wing SAR carrier airframe (2.20 m / 1.28 m swept, 14.95 kg MTOW, US$1,320 COTS); electric VLOS surrogate then 12S Schübeler EDF; >= +40.7 N thrust margin",
             "excess_thrust_at_400kmh_n": i_thrust_margin_n,
             "max_level_speed_kmh": i_vmax_kmh,
             "airframe_avionics_bom_usd": f02.airframe_avionics_bom_usd,
-            "cots_gate2_edf_surrogate_and_thrust_stand_usd": 394.50,  # Amazon Order #111-5835225-7167436 (1.20m 70mm 6S EDF + 50kg load cell + bench)
+            "cots_gate2_edf_surrogate_and_thrust_stand_usd": 394.50,  # 1.20m 70mm 6S EDF surrogate + 50kg load cell thrust stand
             "exit_criterion_met": i_passed,
         },
         "K": {
