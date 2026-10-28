@@ -329,7 +329,7 @@ class TestQualityAssessmentRemediations(unittest.TestCase):
         self.assertTrue(ok, f"Expected bundle verification to pass, got: {report_lines}")
 
         # Tamper with 1 byte of the saved JPEG on disk -> verification must fail!
-        jpg_files = [fn for fn in os.listdir(self.save_dir) if fn.endswith(".jpg")]
+        jpg_files = [fn for fn in os.listdir(self.save_dir) if fn.endswith(".jpg") and fn != "live_frame.jpg"]
         self.assertEqual(len(jpg_files), 1)
         jpg_path = os.path.join(self.save_dir, jpg_files[0])
         with open(jpg_path, "r+b") as f:

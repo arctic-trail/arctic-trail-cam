@@ -525,8 +525,8 @@ def process_incoming_pulse_stream(pulse_timestamps_us, chip_us=CHIP_DURATION_US)
     if not locks:
         return {"status": "No preamble lock", "payload": None, "symbol_count": 0, "raw_bytes_len": 0}
 
-    # Filter to valid frame preamble locks (sync word distance <= 6 bits)
-    valid_pass_locks = sorted([lk for lk in locks if lk[3] <= 6], key=lambda x: x[0])
+    # Filter to valid frame preamble locks (sync word distance <= 4 bits)
+    valid_pass_locks = sorted([lk for lk in locks if lk[3] <= 4], key=lambda x: x[0])
     search_locks = valid_pass_locks if valid_pass_locks else locks[:1]
 
     pass_demods = []
@@ -535,20 +535,13 @@ def process_incoming_pulse_stream(pulse_timestamps_us, chip_us=CHIP_DURATION_US)
     first_raw_len = 0
 
     for idx, (t0_us, data_start_us, period_est_us, sync_dist) in enumerate(search_locks):
-        # Bound this pass's pulses to before the next valid pass's preamble t0
-        if idx + 1 < len(search_locks):
-            next_t0 = search_locks[idx + 1][0] - period_est_us
-            end_i = bisect.bisect_right(sorted_pulses, next_t0)
-            pass_pulses = sorted_pulses[:end_i]
-        else:
-            pass_pulses = sorted_pulses
-
-        symbols, erased_indices = _demodulate_from_lock(
-            pass_pulses, data_start_us, period_est_us, nom_chip_us=chip_us
+        # First attempt full-stream demodulation (parse_sky_frame slices exact frame length)
+        full_symbols, full_erased = _demodulate_from_lock(
+            sorted_pulses, data_start_us, period_est_us, nom_chip_us=chip_us
         )
-        raw_data, erased_mask = decode_8ppm_symbols_with_erasures(symbols, erased_indices)
+        raw_data, erased_mask = decode_8ppm_symbols_with_erasures(full_symbols, full_erased)
         if idx == 0:
-            first_sym_count = len(symbols)
+            first_sym_count = len(full_symbols)
             first_raw_len = len(raw_data)
 
         payload, status = parse_sky_frame(raw_data, erased_mask_bytes=erased_mask)
@@ -556,12 +549,34 @@ def process_incoming_pulse_stream(pulse_timestamps_us, chip_us=CHIP_DURATION_US)
             return {
                 "status": "OK",
                 "payload": payload,
-                "symbol_count": len(symbols),
+                "symbol_count": len(full_symbols),
                 "raw_bytes_len": len(raw_data),
                 "pass_used": idx + 1,
             }
+
+        # Bound this pass's pulses to before the next valid pass's preamble t0 for carousel combining
+        if idx + 1 < len(search_locks):
+            next_t0 = search_locks[idx + 1][0] - period_est_us
+            end_i = bisect.bisect_right(sorted_pulses, next_t0)
+            pass_pulses = sorted_pulses[:end_i]
+            symbols, erased_indices = _demodulate_from_lock(
+                pass_pulses, data_start_us, period_est_us, nom_chip_us=chip_us
+            )
+            raw_data_b, erased_mask_b = decode_8ppm_symbols_with_erasures(symbols, erased_indices)
+            payload_b, status_b = parse_sky_frame(raw_data_b, erased_mask_bytes=erased_mask_b)
+            if payload_b is not None and status_b == "OK":
+                return {
+                    "status": "OK",
+                    "payload": payload_b,
+                    "symbol_count": len(symbols),
+                    "raw_bytes_len": len(raw_data_b),
+                    "pass_used": idx + 1,
+                }
+        else:
+            symbols, erased_indices = full_symbols, full_erased
+
         last_status = status
-        if sync_dist <= 6 and len(symbols) >= 24:
+        if sync_dist <= 4 and len(symbols) >= 24:
             pass_demods.append((symbols, erased_indices))
 
     # Multi-pass carousel erasure combining: fill erased symbols in Pass 1 using non-erased symbols from Pass 2..K
@@ -1578,13 +1593,27 @@ class PlutoSDRReceiver:
         self.lna_ven_voltage_v = 3.3  # Driven from Pico 2 H Pin 36 (3V3_OUT), never +5.0V
         self._sdr = None
         self.hardware_attached = False
+        self.ensure_hardware_connected()
+
+    def ensure_hardware_connected(self):
+        """
+        Boot-Order & Power-Loss Independence:
+        Probes and connects (or reconnects after a power cycle / hot-plug event)
+        to the ADALM-PLUTO SDR so RX works regardless of plug or boot order.
+        """
+        if self.hardware_attached and self._sdr is not None:
+            return True
         try:
             import adi  # type: ignore
             self._sdr = adi.Pluto(uri=self.sdr_uri)
             self.hardware_attached = True
+            return True
         except Exception:
+            self._sdr = None
+            self.hardware_attached = False
             if not self.simulate_if_missing:
                 raise RuntimeError(f"ADALM-PLUTO SDR not reachable at {self.sdr_uri} and simulate_if_missing=False")
+            return False
 
     def verify_bistatic_rotor_micro_doppler(
         self,
@@ -1613,6 +1642,8 @@ class PlutoSDRReceiver:
         simulated_passes=None,
         cfo_search_range_hz=400.0,
     ):
+        if simulated_passes is None:
+            self.ensure_hardware_connected()
         if self.hardware_attached and self._sdr is not None and simulated_passes is None:
             import os
             import sys
@@ -1625,10 +1656,16 @@ class PlutoSDRReceiver:
                 fhss_key, num_passes=3, civilian_eu_compliant=self.civilian_eu_compliant
             )
             passes = []
-            for freq_mhz in carriers_mhz:
-                self._sdr.rx_lo = int(round(freq_mhz * 1e6))
-                iq = self._sdr.rx()
-                passes.append([float(x) for x in np.abs(iq)])
+            try:
+                for freq_mhz in carriers_mhz:
+                    self._sdr.rx_lo = int(round(freq_mhz * 1e6))
+                    iq = self._sdr.rx()
+                    passes.append([float(x) for x in np.abs(iq)])
+            except Exception:
+                self._sdr = None
+                self.hardware_attached = False
+                if not self.simulate_if_missing:
+                    raise
         else:
             passes = simulated_passes or []
 

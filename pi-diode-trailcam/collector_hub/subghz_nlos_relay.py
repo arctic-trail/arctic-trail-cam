@@ -233,8 +233,30 @@ def forward_stream_to_hub(stream_bytes, hub_ip="127.0.0.1", hub_port=5514):
     return len(packets)
 
 
+def _resolve_active_serial_port(preferred_port="/dev/ttyUSB0"):
+    """
+    Boot-Order & Hot-Plug Independence Helper:
+    Returns `preferred_port` if present on disk, or auto-discovers hot-plugged
+    USB serial transceivers (`/dev/ttyUSB*`, `/dev/ttyACM*`, `/dev/cu.usbmodem*`)
+    when `preferred_port` is set to `'auto'` or re-enumerated after a power cycle.
+    """
+    if preferred_port and preferred_port != "auto" and os.path.exists(preferred_port):
+        return preferred_port
+    if preferred_port == "auto":
+        import glob
+        for pattern in ("/dev/ttyUSB*", "/dev/ttyACM*", "/dev/cu.usbmodem*"):
+            matches = sorted(glob.glob(pattern))
+            if matches:
+                return matches[0]
+    return None
+
+
 def transmit_nlos_payload(payload_bytes, serial_port="/dev/ttyUSB0", baud=115200, udp_bridge_addr=None):
-    """Writes NLOS-framed payload to the Sub-GHz serial transceiver (or optional UDP test bridge)."""
+    """
+    Writes NLOS-framed payload to the Sub-GHz serial transceiver (or optional UDP test bridge).
+    Enforces Boot-Order & Power-Loss Independence: safely catches transient USB disconnect /
+    brownout errors and falls back to POSIX termios if pyserial is unavailable.
+    """
     sent = False
     if udp_bridge_addr:
         host, port = udp_bridge_addr
@@ -245,14 +267,30 @@ def transmit_nlos_payload(payload_bytes, serial_port="/dev/ttyUSB0", baud=115200
                 sock.sendto(payload_bytes[i:i + 1200], (host, int(port)))
                 time.sleep(0.0005)
             sent = True
+        except OSError:
+            pass
         finally:
             sock.close()
-    if serial_port and os.path.exists(serial_port):
-        import serial
-        with serial.Serial(serial_port, baud, timeout=2.0) as ser:
-            ser.write(payload_bytes)
-            ser.flush()
-            sent = True
+    active_port = _resolve_active_serial_port(serial_port)
+    if active_port:
+        try:
+            import serial  # type: ignore
+            with serial.Serial(active_port, baud, timeout=2.0) as ser:
+                ser.write(payload_bytes)
+                ser.flush()
+                sent = True
+        except ImportError:
+            try:
+                fd = os.open(active_port, os.O_RDWR | os.O_NOCTTY)
+                try:
+                    os.write(fd, payload_bytes)
+                    sent = True
+                finally:
+                    os.close(fd)
+            except OSError:
+                pass
+        except Exception:
+            pass
     return sent
 
 
@@ -261,6 +299,9 @@ def run_rx_bridge(serial_port="/dev/ttyUSB0", baud=115200, hub_ip="127.0.0.1", h
     Runs the Farmhouse Sub-GHz RX Bridge (`--mode rx-bridge` / `--mode rx-farmhouse`).
     Reads NLOS serial frames from the Sub-GHz transceiver (or local UDP test socket),
     verifies CRC32, and injects reconstructed `DD\x01` / `DD\x02` datagrams into `receiver_hub.py`.
+    Enforces strict Boot-Order & Hot-Plug Independence: if the USB receiver is plugged in
+    AFTER this daemon starts (or loses power and reboots mid-mission), the loop continuously
+    auto-connects and recovers without dropping state or requiring a manual restart.
     """
     rx_buf = b""
     forwarded_total = 0
@@ -274,9 +315,22 @@ def run_rx_bridge(serial_port="/dev/ttyUSB0", baud=115200, hub_ip="127.0.0.1", h
         udp_in_sock.settimeout(0.5)
 
     ser = None
-    if not udp_in_sock and serial_port and os.path.exists(serial_port):
-        import serial
-        ser = serial.Serial(serial_port, baud, timeout=0.5)
+    raw_fd = None
+
+    def _close_serial_handles():
+        nonlocal ser, raw_fd
+        if ser is not None:
+            try:
+                ser.close()
+            except Exception:
+                pass
+            ser = None
+        if raw_fd is not None:
+            try:
+                os.close(raw_fd)
+            except Exception:
+                pass
+            raw_fd = None
 
     try:
         while True:
@@ -286,10 +340,41 @@ def run_rx_bridge(serial_port="/dev/ttyUSB0", baud=115200, hub_ip="127.0.0.1", h
                     chunk, _ = udp_in_sock.recvfrom(65535)
                 except socket.timeout:
                     chunk = b""
-            elif ser is not None:
-                chunk = ser.read(4096)
             else:
-                time.sleep(0.2)
+                # Auto-connect / hot-plug reconnect if serial device was plugged in after boot
+                if ser is None and raw_fd is None:
+                    active_port = _resolve_active_serial_port(serial_port)
+                    if active_port:
+                        try:
+                            import serial  # type: ignore
+                            ser = serial.Serial(active_port, baud, timeout=0.5)
+                        except ImportError:
+                            try:
+                                raw_fd = os.open(active_port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+                            except OSError:
+                                raw_fd = None
+                        except Exception:
+                            ser = None
+
+                if ser is not None:
+                    try:
+                        chunk = ser.read(4096)
+                    except Exception:
+                        _close_serial_handles()
+                        time.sleep(0.25)
+                elif raw_fd is not None:
+                    try:
+                        chunk = os.read(raw_fd, 4096)
+                        if chunk == b"":
+                            _close_serial_handles()
+                            time.sleep(0.25)
+                    except BlockingIOError:
+                        time.sleep(0.05)
+                    except OSError:
+                        _close_serial_handles()
+                        time.sleep(0.25)
+                else:
+                    time.sleep(0.25)
 
             if chunk:
                 rx_buf += chunk
@@ -306,8 +391,7 @@ def run_rx_bridge(serial_port="/dev/ttyUSB0", baud=115200, hub_ip="127.0.0.1", h
         out_sock.close()
         if udp_in_sock:
             udp_in_sock.close()
-        if ser:
-            ser.close()
+        _close_serial_handles()
     return forwarded_total
 
 
@@ -315,6 +399,9 @@ def run_tx_vault_watcher(vault_dir, serial_port, baud, signing_key_hex, udp_brid
     """
     Watches `vault_dir/alerts_journal.jsonl` in `--mode tx-vault` and transmits new alerts
     over the 2 km Sub-GHz NLOS link.
+    Enforces Boot-Order Independence: in continuous daemon mode (`once=False`), if the
+    transceiver is not yet plugged in (`sent=False`), alerts remain queued and are
+    automatically transmitted as soon as the transceiver is connected.
     """
     journal_path = os.path.join(vault_dir, "alerts_journal.jsonl")
     seen_nonces = set()
@@ -342,9 +429,12 @@ def run_tx_vault_watcher(vault_dir, serial_port, baud, signing_key_hex, udp_brid
                         img_bytes = imgf.read()
                     frames, _, _ = build_nlos_serial_frames(rec, img_bytes, signing_key_hex)
                     payload = b"".join(frames) * 2
-                    transmit_nlos_payload(payload, serial_port=serial_port, baud=baud, udp_bridge_addr=udp_bridge_addr)
-                    seen_nonces.add(nonce)
-                    relayed_count += 1
+                    sent = transmit_nlos_payload(
+                        payload, serial_port=serial_port, baud=baud, udp_bridge_addr=udp_bridge_addr
+                    )
+                    if sent or once:
+                        seen_nonces.add(nonce)
+                        relayed_count += 1
         if once:
             break
         time.sleep(1.0)

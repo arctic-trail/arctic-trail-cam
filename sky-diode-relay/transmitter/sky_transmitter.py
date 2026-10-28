@@ -1035,13 +1035,27 @@ class PlutoSDRTransmitter:
         self.pa_enable_voltage_v = 3.3 if self.rf_profile["pa_gate_gp3"] == 1 else 0.0
         self._sdr = None
         self.hardware_attached = False
+        self.ensure_hardware_connected()
+
+    def ensure_hardware_connected(self):
+        """
+        Boot-Order & Power-Loss Independence:
+        Probes and connects (or reconnects after a power cycle / hot-plug event)
+        to the ADALM-PLUTO SDR so TX works regardless of plug or boot order.
+        """
+        if self.hardware_attached and self._sdr is not None:
+            return True
         try:
             import adi  # type: ignore
             self._sdr = adi.Pluto(uri=self.sdr_uri)
             self.hardware_attached = True
+            return True
         except Exception:
+            self._sdr = None
+            self.hardware_attached = False
             if not self.simulate_if_missing:
                 raise RuntimeError(f"ADALM-PLUTO SDR not reachable at {self.sdr_uri} and simulate_if_missing=False")
+            return False
 
     def transmit_vk7mo_frame(self, payload_bytes, fhss_key="FINLAND-BORDER-FHSS-KEY-2026", symbol_ms=16.0):
         tx_pkt = encode_vk7mo_lockin_frame(
@@ -1052,15 +1066,23 @@ class PlutoSDRTransmitter:
         )
         carriers_mhz = tx_pkt["carrier_schedule_mhz"]
         wf = tx_pkt["waveform"]
+        self.ensure_hardware_connected()
         if self.hardware_attached and self._sdr is not None:
-            import numpy as np  # type: ignore
+            try:
+                import numpy as np  # type: ignore
 
-            self._sdr.sample_rate = int(tx_pkt["sample_rate_hz"] * 64)
-            self._sdr.tx_hardwaregain_chan0 = float(self.rf_profile["pluto_tx_power_dbm"] - 10.0)
-            iq = (np.array(wf, dtype=np.complex64) * (2 ** 14))
-            for freq_mhz in carriers_mhz:
-                self._sdr.tx_lo = int(round(freq_mhz * 1e6))
-                self._sdr.tx(iq)
+                self._sdr.sample_rate = int(tx_pkt["sample_rate_hz"] * 64)
+                self._sdr.tx_hardwaregain_chan0 = float(self.rf_profile["pluto_tx_power_dbm"] - 10.0)
+                iq = (np.array(wf, dtype=np.complex64) * (2 ** 14))
+                for freq_mhz in carriers_mhz:
+                    self._sdr.tx_lo = int(round(freq_mhz * 1e6))
+                    self._sdr.tx(iq)
+            except Exception:
+                # SDR lost power or was unplugged mid-frame: mark detached for auto-reconnect on next frame
+                self._sdr = None
+                self.hardware_attached = False
+                if not self.simulate_if_missing:
+                    raise
         return {
             "hardware_attached": self.hardware_attached,
             "sdr_uri": self.sdr_uri,

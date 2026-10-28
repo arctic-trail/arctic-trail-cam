@@ -1771,6 +1771,25 @@ def main():
         # Scale thresholds up by 2.5x during storm conditions to protect battery
         multiplier = 2.5 if storm_mode_active else 1.0
 
+        # Boot-order & hot-plug independence: if any sensor was powered/connected after
+        # the Pico booted (or recovered from a transient brownout), periodically re-probe
+        # I2C peripherals and refresh the active operating profile automatically.
+        if loop_count > 0 and (loop_count % 25 == 0) and (
+            not sensor_health.get("mag") or not sensor_health.get("seis") or not sensor_health.get("lwir")
+        ):
+            prev_mag_ok = sensor_health.get("mag", False)
+            prev_seis_ok = sensor_health.get("seis", False)
+            init_sensors()
+            active_profile = detect_operating_profile()
+            if (not prev_mag_ok) and sensor_health.get("mag"):
+                fresh_m = read_magnetometer()
+                if fresh_m > 0:
+                    mag_ema = fresh_m
+            if (not prev_seis_ok) and sensor_health.get("seis"):
+                fresh_s = read_seismic_rms(8)
+                if fresh_s > 0:
+                    seis_ema = fresh_s
+
         # Sample Tier 1 sensors
         current_mag = read_magnetometer()
         current_seis = read_seismic_rms(8)

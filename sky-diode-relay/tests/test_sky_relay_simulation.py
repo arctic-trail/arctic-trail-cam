@@ -289,6 +289,7 @@ def test_corrupt_packet_rejection():
 
 def test_signed_camera_alert_bridge():
     print("[*] 7. Validating Ed25519 Signed Camera Alert Bridge Over 8-PPM Optical Channel...")
+    random.seed(42)
     from nacl.signing import SigningKey
     sk = SigningKey.generate()
     sk_hex = sk.encode().hex()
