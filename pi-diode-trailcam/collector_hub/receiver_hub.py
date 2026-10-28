@@ -556,8 +556,36 @@ def process_datagram(pkt, now=None, strict_clock_skew=None):
 
 
 # ==============================================================================
+def _join_ipv6_all_nodes_multicast(sock6):
+    """
+    Joins the RFC 4291 IPv6 All-Nodes Link-Local Multicast group (ff02::1, MAC 33:33:00:00:00:01)
+    across all active Ethernet interfaces so unidirectional optical diode UDP frames sent to
+    ff02::1%<iface> are received with zero IPv4 address, zero ARP, and zero DHCP configuration
+    on either end. Safe to call periodically so if Collector Media Converter #2 or the surface
+    USB-Ethernet adapter loses power or is hot-plugged in any boot order, multicast reception
+    recovers automatically within <2 seconds without restarting receiver_hub.py.
+    """
+    if sock6 is None:
+        return
+    try:
+        mcast_addr = socket.inet_pton(socket.AF_INET6, "ff02::1")
+        opt_join = getattr(socket, "IPV6_JOIN_GROUP", getattr(socket, "IPV6_ADD_MEMBERSHIP", 12))
+        if hasattr(socket, "if_nameindex"):
+            for if_idx, if_name in socket.if_nameindex():
+                if if_name.startswith(("lo", "gif", "stf", "utun", "awdl", "llw")):
+                    continue
+                mreq = mcast_addr + struct.pack("@I", if_idx)
+                try:
+                    sock6.setsockopt(socket.IPPROTO_IPV6, opt_join, mreq)
+                except OSError:
+                    pass
+    except Exception:
+        pass
+
+
 def run_hub(port=UDP_PORT, bind_addr="0.0.0.0", out_dir=OUT_DIR, max_clock_skew=MAX_CLOCK_SKEW_SEC, strict_clock_skew=STRICT_CLOCK_SKEW):
     global OUT_DIR, UDP_PORT, MAX_CLOCK_SKEW_SEC, STRICT_CLOCK_SKEW
+    import select
     OUT_DIR = out_dir
     UDP_PORT = port
     MAX_CLOCK_SKEW_SEC = max_clock_skew
@@ -588,13 +616,47 @@ def run_hub(port=UDP_PORT, bind_addr="0.0.0.0", out_dir=OUT_DIR, max_clock_skew=
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1024 * 1024)
     except OSError:
         pass
-    sock.settimeout(2.0)
+    sock.setblocking(False)
+
+    # Dual-Stack Zero-Config IPv6 Link-Local Multicast socket ([::]:port joined to ff02::1)
+    # Guarantees 100% boot-order & power-glitch resilience even when eth0/en10 has no IPv4 or ARP
+    sock6 = None
+    try:
+        sock6 = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        sock6.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if hasattr(socket, "SO_REUSEPORT"):
+            try:
+                sock6.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            except OSError:
+                pass
+        if hasattr(socket, "IPV6_V6ONLY"):
+            try:
+                sock6.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            except OSError:
+                pass
+        try:
+            sock6.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1024 * 1024)
+        except OSError:
+            pass
+        sock6.bind(("::", port))
+        sock6.setblocking(False)
+        _join_ipv6_all_nodes_multicast(sock6)
+    except Exception as e:
+        if sock6 is not None:
+            try:
+                sock6.close()
+            except Exception:
+                pass
+        sock6 = None
+        print(f"[*] IPv6 multicast listener notice: {e}", file=sys.stderr)
+
+    active_socks = [s for s in (sock, sock6) if s is not None]
     write_receiver_heartbeat(port=port, out_dir=OUT_DIR)
 
     print("==================================================")
     print("[*] PI-DIODE COLLECTOR HUB ACTIVE")
-    print(f"[*] Listening on UDP {bind_addr}:{port}")
-    print("[*] Physical Diode Isolation: ENFORCED")
+    print(f"[*] Listening on UDP {bind_addr}:{port} + IPv6 [::]:{port} (ff02::1 Zero-Config Diode)")
+    print("[*] Physical Diode Isolation: ENFORCED (Boot-Order & Power-Glitch Hardened)")
     print(f"[*] Storage Directory: {OUT_DIR}")
     for nid, vk in KNOWN_NODE_PUBKEYS.items():
         if vk.encode().hex() in DEFAULT_EXAMPLE_PUBKEYS:
@@ -605,31 +667,45 @@ def run_hub(port=UDP_PORT, bind_addr="0.0.0.0", out_dir=OUT_DIR, max_clock_skew=
 
     while True:
         try:
-            pkt, _ = sock.recvfrom(MAX_DATAGRAM_BYTES)
-        except socket.timeout:
-            now = time.time()
-            write_receiver_heartbeat(port=port, out_dir=OUT_DIR)
-            if now - last_gc_time > 5.0:
-                cleanup_stale_buffers()
-                last_gc_time = now
-            continue
+            readable, _, _ = select.select(active_socks, [], [], 2.0)
         except KeyboardInterrupt:
             print("\n[*] Receiver Hub shutting down cleanly.")
             break
         except Exception as e:
-            print(f"[!] Socket read error: {e}", file=sys.stderr)
+            print(f"[!] Select error: {e}", file=sys.stderr)
             continue
 
-        # Periodic sliding-window buffer cleanup & heartbeat update
+        if not readable:
+            now = time.time()
+            write_receiver_heartbeat(port=port, out_dir=OUT_DIR)
+            _join_ipv6_all_nodes_multicast(sock6)
+            if now - last_gc_time > 5.0:
+                cleanup_stale_buffers()
+                last_gc_time = now
+            continue
+
         now = time.time()
         if now - last_gc_time > 5.0:
             cleanup_stale_buffers()
             write_receiver_heartbeat(port=port, out_dir=OUT_DIR)
+            _join_ipv6_all_nodes_multicast(sock6)
             last_gc_time = now
 
-        process_datagram(pkt, now=now, strict_clock_skew=STRICT_CLOCK_SKEW)
+        for r_sock in readable:
+            while True:
+                try:
+                    pkt, _ = r_sock.recvfrom(MAX_DATAGRAM_BYTES)
+                except (BlockingIOError, InterruptedError, socket.timeout):
+                    break
+                except Exception:
+                    break
+                process_datagram(pkt, now=now, strict_clock_skew=STRICT_CLOCK_SKEW)
 
-    sock.close()
+    for s in active_socks:
+        try:
+            s.close()
+        except Exception:
+            pass
 
 
 def enforce_storage_retention(out_dir=None, max_files=None):

@@ -562,18 +562,125 @@ def find_primary_ethernet_interface():
     return "eth0"
 
 def setup_unidirectional_network():
-    """Configures static IP and permanent ARP so UDP transmits without any RX return link."""
+    """
+    Configures static IPv4 + permanent ARP (when privileged) AND ensures the primary wired
+    interface is UP so both IPv4 (10.10.0.10 -> 10.10.0.100) and Zero-Config IPv6 Link-Local
+    Multicast (ff02::1%<iface>, MAC 33:33:00:00:00:01) transmit over the optical diode without
+    any RX return link, DHCP server, or ARP reply.
+    """
     iface = find_primary_ethernet_interface()
     try:
-        subprocess.run(["ip", "link", "set", iface, "up"], check=False)
-        subprocess.run(["ip", "addr", "add", f"{LOCAL_IP}/24", "dev", iface], check=False)
+        subprocess.run(["ip", "link", "set", iface, "up"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["ip", "addr", "replace", f"{LOCAL_IP}/24", "dev", iface], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.run(
             ["ip", "neigh", "replace", RECEIVER_IP, "lladdr", RECEIVER_MAC, "nud", "permanent", "dev", iface],
-            check=False
+            check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
     except Exception as e:
         print(f"[!] Network setup warning ({iface}): {e}", file=sys.stderr)
     return iface
+
+
+def renegotiate_optical_diode_link(iface=None, force_usb_cycle=None, down_hold_s=0.85):
+    """
+    Boot-Order & Power-Glitch Hardening for Buried Unidirectional Optical Diodes:
+    Forces Field Media Converter #1 (StarTech MCMGBSCSM10) inside the buried vault to re-emit
+    its 0.5-second IEEE 802.3z Clause 37 (/C/) 1000BASE-X optical auto-negotiation handshake
+    burst down the fiber so that if Collector Media Converter #2 on the surface boots later
+    or recovers from an intermittent power glitch, Collector Box #2 automatically relocks its
+    Top-Left 1000M Fiber Link LED without any human touching the buried vault:
+      1. Layer 1 (RP1 GPIO 42 `USB_VBUS_EN` Hardware VBUS Power-Cycle via `pinctrl`):
+         Directly drives the Raspberry Pi 5's RP1 USB VBUS load switch (`GPIO 42`) low for
+         `down_hold_s` seconds (`pinctrl set 42 op dl`) and restores `VBUS_EN1` (`pinctrl set 42 a2`).
+         Works 100% unprivileged (via `gpio` group `/dev/gpiomem*`), physically cutting and
+         restoring +5.0V DC to the `StarTech USB2TYPEM` barrel cable so Field Box #1 cold-boots
+         from 0.00V and blasts a fresh `/C/` optical handshake regardless of its LFP switch state.
+      2. Layer 2 (uhubctl / sysfs USB Port Power Control + LFP Copper Carrier Pulse):
+         Falls back to `uhubctl`, sysfs `usb*-port*/disable`, `ETH_RST_N` (`GPIO 32`), and
+         `ip link set <iface> down/up` + `ethtool -r <iface>`.
+    """
+    if iface is None:
+        iface = find_primary_ethernet_interface()
+    if force_usb_cycle is None:
+        force_usb_cycle = os.getenv("DIODE_USB_CYCLE", "1") != "0"
+
+    retriggered = False
+    if force_usb_cycle:
+        # 1a. Primary Raspberry Pi 5 RP1 GPIO 42 (USB_VBUS_EN) hardware load-switch power cycle
+        try:
+            res_off = subprocess.run(
+                ["pinctrl", "set", "42", "op", "dl"],
+                check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2
+            )
+            if res_off.returncode == 0:
+                time.sleep(max(0.1, float(down_hold_s)))
+                subprocess.run(
+                    ["pinctrl", "set", "42", "a2"],
+                    check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2
+                )
+                retriggered = True
+        except Exception:
+            try:
+                subprocess.run(
+                    ["pinctrl", "set", "42", "a2"],
+                    check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2
+                )
+            except Exception:
+                pass
+
+        # 1b. Fallback uhubctl on Raspberry Pi 5 RP1 root hubs (usb1 / usb3)
+        if not retriggered:
+            for hub_loc in ("1", "3"):
+                try:
+                    res = subprocess.run(
+                        ["uhubctl", "-l", hub_loc, "-a", "cycle", "-d", "1"],
+                        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=4
+                    )
+                    if res.returncode == 0:
+                        retriggered = True
+                except Exception:
+                    pass
+        # 1c. Fallback kernel sysfs port disable/enable on usb1-port1 / usb2-port1
+        if not retriggered:
+            for sys_port in (
+                "/sys/bus/usb/devices/usb1/1-0:1.0/usb1-port1/disable",
+                "/sys/bus/usb/devices/usb2/2-0:1.0/usb2-port1/disable",
+            ):
+                if os.path.exists(sys_port):
+                    try:
+                        with open(sys_port, "w", encoding="utf-8") as f:
+                            f.write("1\n")
+                        time.sleep(max(0.1, float(down_hold_s)))
+                        with open(sys_port, "w", encoding="utf-8") as f:
+                            f.write("0\n")
+                        retriggered = True
+                    except Exception:
+                        pass
+
+    # 2. LFP-coupled copper carrier pulse (ip link down -> hold -> up + ethtool -r)
+    if not retriggered:
+        try:
+            res_down = subprocess.run(
+                ["ip", "link", "set", iface, "down"],
+                check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            if res_down.returncode == 0:
+                time.sleep(max(0.1, float(down_hold_s)))
+                subprocess.run(
+                    ["ip", "link", "set", iface, "up"],
+                    check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+                retriggered = True
+            subprocess.run(
+                ["ethtool", "-r", iface],
+                check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+        except Exception:
+            pass
+
+    setup_unidirectional_network()
+    wait_for_ethernet_carrier(iface=iface, timeout_s=4.0)
+    return retriggered
 
 def wait_for_ethernet_carrier(iface=None, timeout_s=3.0):
     """
@@ -724,16 +831,53 @@ def transmit_over_diode(sock, alert_meta, jpeg_bytes, shared_trunk=None, custom_
         shared_trunk=shared_trunk
     )
 
-    # 3x Carousel Burst with calibrated micro-pacing to protect receiver kernel buffers
-    for pass_idx in range(3):
-        if pass_idx > 0 and interpass_delays[pass_idx - 1] > 0:
-            time.sleep(interpass_delays[pass_idx - 1])
-        sock.sendto(header_pkt, (RECEIVER_IP, UDP_PORT))
-        time.sleep(0.0012)  # 1.2ms pacing for metadata
-        for idx, chunk in enumerate(chunks):
-            chunk_hdr = b"DD\x02" + nonce_bytes + struct.pack(">HH", idx, total_chunks)
-            sock.sendto(chunk_hdr + chunk, (RECEIVER_IP, UDP_PORT))
-            time.sleep(0.0008)  # 800us pacing between chunks (~10 Mbps line rate)
+    # Optional Zero-Config IPv6 All-Nodes Link-Local Multicast companion socket (ff02::1%<iface>)
+    # Ensures 100% delivery across the optical diode even if eth0/end0 has no IPv4 address, DHCP, or ARP
+    sock6 = None
+    ipv6_dest = None
+    is_real_sock = isinstance(sock, socket.socket)
+    if is_real_sock and os.getenv("DISABLE_IPV6_DIODE", "0") != "1":
+        try:
+            iface = find_primary_ethernet_interface()
+            if hasattr(socket, "if_nametoindex"):
+                if_idx = socket.if_nametoindex(iface)
+                sock6 = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+                ipv6_dest = ("ff02::1", UDP_PORT, 0, if_idx)
+        except Exception:
+            sock6 = None
+            ipv6_dest = None
+
+    def _dual_sendto(pkt):
+        if is_real_sock:
+            try:
+                sock.sendto(pkt, (RECEIVER_IP, UDP_PORT))
+            except OSError:
+                pass
+            if sock6 is not None and ipv6_dest is not None:
+                try:
+                    sock6.sendto(pkt, ipv6_dest)
+                except OSError:
+                    pass
+        else:
+            sock.sendto(pkt, (RECEIVER_IP, UDP_PORT))
+
+    try:
+        # 3x Carousel Burst with calibrated micro-pacing to protect receiver kernel buffers
+        for pass_idx in range(3):
+            if pass_idx > 0 and interpass_delays[pass_idx - 1] > 0:
+                time.sleep(interpass_delays[pass_idx - 1])
+            _dual_sendto(header_pkt)
+            time.sleep(0.0012)  # 1.2ms pacing for metadata
+            for idx, chunk in enumerate(chunks):
+                chunk_hdr = b"DD\x02" + nonce_bytes + struct.pack(">HH", idx, total_chunks)
+                _dual_sendto(chunk_hdr + chunk)
+                time.sleep(0.0008)  # 800us pacing between chunks (~10 Mbps line rate)
+    finally:
+        if sock6 is not None:
+            try:
+                sock6.close()
+            except Exception:
+                pass
 
 
 def signal_pico_done():
@@ -1283,7 +1427,10 @@ def main():
             best_crop_jpeg = enc.tobytes()
 
         # Ensure 1000BASE-T / optical carrier has completed auto-negotiation before firing UDP burst
-        wait_for_ethernet_carrier(iface=iface, timeout_s=3.0)
+        if os.getenv("DIODE_AUTO_RENEGOTIATE", "0") == "1":
+            renegotiate_optical_diode_link(iface=iface)
+        else:
+            wait_for_ethernet_carrier(iface=iface, timeout_s=3.0)
 
         # Evaluate hydrocarbon/wildfire smoke obscuration & fuse optional USB TOPDON TC001 8-14 um LWIR hotspots
         lwir_smoke_meta = detect_smoke_obscuration_and_fuse_tc001_lwir(

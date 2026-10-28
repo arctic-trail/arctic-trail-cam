@@ -8,10 +8,17 @@ echo "[*] Stripping any macOS metadata files (._*, .DS_Store, .Spotlight-V100, .
 find . /boot/firmware /opt/diode-node -name '._*' -o -name '.DS_Store' -delete 2>/dev/null || true
 rm -rf /boot/firmware/.Spotlight-V100 /boot/firmware/.fseventsd /boot/firmware/.Trashes 2>/dev/null || true
 
-echo "[*] Installing core Python & camera dependencies..."
+echo "[*] Installing core Python, USB VBUS power-control (uhubctl), ethtool & camera dependencies..."
 apt-get update
-apt-get install -y python3-picamera2 python3-opencv python3-nacl python3-serial
+apt-get install -y python3-picamera2 python3-opencv python3-nacl python3-serial uhubctl ethtool || apt-get install -y python3-picamera2 python3-opencv python3-nacl python3-serial
 apt-get install -y hailo-all || echo "[i] hailo-all not available on this board (e.g. Pi 4 or non-Hailo OS); using CPU ONNX / Motion fallback."
+
+# Persist static IPv4 on wired Ethernet in NetworkManager so link bounces never block on DHCP
+if command -v nmcli >/dev/null 2>&1; then
+    for conn_name in "netplan-eth0" "netplan-end0" "Wired connection 1"; do
+        nmcli connection modify "$conn_name" ipv4.method manual ipv4.addresses 10.10.0.10/24 ipv4.never-default yes 2>/dev/null || true
+    done
+fi
 
 echo "[*] Installing sender_node.py and generate_keys.py to /opt/diode-node..."
 mkdir -p /opt/diode-node /etc/trailcam

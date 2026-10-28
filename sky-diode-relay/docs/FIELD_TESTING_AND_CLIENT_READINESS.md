@@ -35,9 +35,14 @@
 4. **Indoor Over-the-Air Bench Test (`3 m` Separation, Reduced TX Drive):** With `ADALM-PLUTO #1` set to low drive (`-20 dBm` before PA) across the room from `ADALM-PLUTO #2`, transmit a signed `DD\x01` + `DD\x02` camera alert burst and confirm `receiver_hub.py` logs the verified `.jpg` image with `0` bit errors.
 
 ### Stage 2: Short-Range Non-Line-of-Sight Forest Canopy / Building Bounce (`200 m – 2 km`) & Gate 3 Range Acceptance
-1. Place the Transmitter Node at the remote cabin/trail site with the `L-com HG2414P` `14 dBi` flat panel mounted on a rigid eave/pole bracket pointed along the compass bearing toward the receiver, tilted `+2° to +5°` upward to clear immediate tree trunks.
-2. Place the Receiver Node `100 m`, `500 m`, and `1,000 m` (`1 km`) away behind trees or terrain with its `HG2414P` panel pointed along the reciprocal compass bearing (`30° × 30°` beamwidth requires only simple compass aiming—no precision optical gimbal).
-3. Run the Gate 3 outdoor range acceptance harness at each checkpoint and record post-correlation SNR, 2D Costas CFO lock, and `Ed25519`-verified frame reconstruction into [`gate3_outdoor_range_report.json`](../gate3_outdoor_range_report.json):
+
+![Stage 2 Outdoor Range Test: Hill Crest & Treetop Canopy-Bounce Terrain](images/stage2_outdoor_hill_crest_terrain_cutaway_v2.jpg)
+
+![Stage 2 Outdoor Range Test (20 Min): Sky-Diode-Relay Step-by-Step With Real Gear](images/stage2_real_hardware_skydiode_test_guide_v8.jpg)
+
+1. **Zero-Disassembly Tailgate Transmitter (`TX`) Setup (`0 m`):** Keep all jumper wires (`Pico 2 H #1 Pin 40 VBUS / Pin 38 GND / Pin 36 3V3_OUT`) and `RG-142` coax cables attached on the left half of your bench towel (`White L-com HG2414P Panel #1` $\leftarrow$ `Silver Mini-Circuits VBF-2435+ Filter` $\leftarrow$ `Flat Green Skyworks SE2576L-EK1 1W PA` $\leftarrow$ `Blue ADALM-PLUTO #1`). Pop open the lid of the white `QILIPSU` vault (without detaching any Trail Cam wires) and plug the two black USB-A cables (`Pico 2 H #1` + `ADALM-PLUTO #1`) into the open USB-A ports on the `Raspberry Pi 5` (powered by the internal `12V 12Ah` battery). Aim `HG2414P Panel #1` along the compass bearing toward the wooded hill crest, tilted `+2° to +5°` upward into the upper pine canopy.
+2. **Mobile Receiver (`RX`) Walk (`100 m`, `500 m`, and `1,000 m` Checkpoints Behind Hill Crest):** Carry the right half of the kit (`White L-com HG2414P Panel #2` $\rightarrow$ `Silver Mini-Circuits VBF-2435+ Filter FIRST` $\rightarrow$ `Flat Blue Skyworks SKY65405-21EK1 LNA` + `Pico 2 H #2` $\rightarrow$ `Blue ADALM-PLUTO #2`) with both black USB-A cables plugged into your laptop's USB-C hubs (`30° × 30°` beamwidth requires only simple compass aiming back toward the hill crest—no precision optical gimbal).
+3. **Run the Automated Gate 3 Range Acceptance Harness:** At each checkpoint (`100 m`, `500 m`, `1,000 m`), record post-correlation SNR, 2D Costas CFO lock, and `Ed25519`-verified frame reconstruction into [`gate3_outdoor_range_report.json`](../gate3_outdoor_range_report.json):
    ```bash
    python3 -B sky-diode-relay/run_gate3_outdoor_range_acceptance.py --self-test
    python3 -B sky-diode-relay/run_gate3_outdoor_range_acceptance.py --checkpoint-m 1000 --snr-db 18.4 --cfo-hz 185.0 --frames-tx 10 --frames-rx 10

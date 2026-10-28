@@ -222,15 +222,15 @@ Now pack and secure the bench-tested assembly inside the foam-lined white `QILIP
 
 ![Stage 5.3B Real-World Build: Strapping Down the Pi 5 & Battery, Internal Zone 3 Power & HDMI Umbilical Harness, Full Overhead Packed Vault, and Optical Fiber Lid Spool](images/real_build/stage5_real_world_final_vault_and_fiber_lid_v5.jpg)
 
-### Step 5.4 — Critical Power-On Sequence: Connect the Battery `Black (-)` Lead LAST to Lock All 4 Green LEDs on Box #2
+### Step 5.4 — Boot-Order & Power-Glitch Hardening for Buried Underground Operation (`RP1 GPIO 42` Auto-Handshake + Zero-Config `ff02::1` Dual-Stack)
 
 > [!IMPORTANT]
-> **WHY THE `12V` BATTERY `BLACK (-)` LEAD MUST BE CONNECTED LAST (`8 GREEN LEDS RULE`):**
-> * Because **`StarTech` Media Converter #1 (`[P13]`)** inside the White Vault is powered directly from the **`Raspberry Pi 5`'s USB-A port** via the **`StarTech USB2TYPEM` USB-to-5V-Barrel cable (`[P19]`)**, connecting the `12V 12Ah` battery powers up **both** the `Pi 5` and `Media Converter #1` together.
-> * When `Media Converter #1` boots, it transmits `1000BASE-X` `/C/` configuration handshake codes for only `~0.5 seconds` before locking with its own `Blue` `50%` splitter loopback leg (`RX`). If **Collector Media Converter #2 (MacBook / Cabin end)** is connected or powered on *after* the White Vault is already running, Box #2 misses that `/C/` handshake burst and its **Top-Left (`1000M` Fiber Link) LED stays dark**!
-> * **The 2-Second Rule That Always Lights All 4 Green LEDs on Box #2:**
->   1. **FIRST (Collector / MacBook End):** Connect and power ON **Media Converter #2** with the incoming Yellow/Outdoor fiber plugged into its **`RX` port** (right optical socket, next to the Ethernet cable) and its front **`LFP` switch slid DOWN (`OFF`)**.
->   2. **LAST (White Field Vault End):** Inside the White `QILIPSU` Vault, **unplug the `Black (-)` spade clip from the `12V 12Ah` battery (`[P17]`) for 2 seconds and plug it back onto the battery `-` tab LAST**. As soon as the White Vault powers up while Box #2 is already listening, **all 4 green LEDs on Box #2 (including Top-Left!) + all 4 green LEDs on Box #1 immediately lock solid green (`8 Green LEDs Total`)**!
+> **ZERO-TOUCH UNDERGROUND HARDENING (WORKS REGARDLESS OF WHICH BOX BOOTS FIRST OR LOSES POWER):**
+> * **Why Unhardened `1000BASE-X` Media Converters Can Miss Link If Surface Power Glitches:** When **`StarTech` Media Converter #1 (`[P13]`)** inside the buried White Vault boots, its IEEE 802.3z Clause 37 (`1000BASE-X`) state machine transmits `/C/` optical configuration ordered sets for only `~0.5 seconds` before locking with its own `Blue` `50%` splitter loopback leg (`RX`). If **Collector Media Converter #2 (MacBook / Starlink / Cabin end)** boots *later* or suffers an intermittent surface power loss while the buried vault stays running, Box #2 wakes up waiting for `/C/` codes and its **Top-Left (`1000M` Fiber Link) LED** would remain dark without re-negotiation.
+> * **3-Layer Autonomous Hardening Built Into `sender_node.py` & `receiver_hub.py` (Zero Manual Unplugging Ever Needed Underground):**
+>   1. **Layer 1 — Hardware USB VBUS Power-Cycle Pulse via `RP1 GPIO 42` (`USB_VBUS_EN`):** Because **Field Media Converter #1** is powered from the **`Raspberry Pi 5`'s USB-A port** via the **`StarTech USB2TYPEM` USB-to-5V-barrel cable (`[P19]`)**, `renegotiate_optical_diode_link()` in `sender_node.py` drives the `Raspberry Pi 5`'s internal **`RP1 GPIO 42` (`USB_VBUS_EN`)** load switch low for `0.85 seconds` (`pinctrl set 42 op dl`) and restores `+5.0V DC` VBUS (`pinctrl set 42 a2`). This physically power-cycles `Field Box #1` in software from inside the buried vault—forcing a fresh `0.5-second` `1000BASE-X` `/C/` optical handshake burst down the fiber so **Surface Box #2 automatically relocks its Top-Left Green LED (`4 + 4 = 8 Green LEDs`)** whenever Surface Box #2 recovers from a power outage!
+>   2. **Layer 2 — Zero-Config Dual-Stack IPv6 Link-Local Multicast (`ff02::1%eth0` $\rightarrow$ `ff02::1%en10`) + Static IPv4:** Whenever either box loses power, standard OS network managers drop temporary IPv4 addresses and flush ARP tables while waiting for DHCP (which can never reply across a one-way optical fiber). `transmit_over_diode()` transmits every signed alert burst simultaneously over **RFC 4291 IPv6 All-Nodes Link-Local Multicast (`ff02::1`, deterministic Ethernet MAC `33:33:00:00:00:01`)** and static IPv4 (`10.10.0.100:5514`), while `receiver_hub.py` continuously re-joins `ff02::1` every `2 seconds` across all active interfaces—requiring **zero DHCP, zero ARP, zero IPv4 address, and zero `sudo` privileges**.
+>   3. **Layer 3 — Duty-Cycled `Domain B` Cold-Boot + Bench Quick-Reset Tip:** In duty-cycled field mode (`STEMMA` / `Pololu` high-side switch `[P12]`), `Field Box #1` cold-boots from `0.00V` on every sensor wake event. During initial bench setup, you can also trigger an instant manual handshake at any time by connecting the **`Black (-)` battery spade clip LAST** (or running `pinctrl set 42 op dl && sleep 1 && pinctrl set 42 a2` on the `Pi 5`).
 
 ### Step 5.5 — Autonomous Field Commissioning: Provision Unique Node Keys & Install `diode-node.service`
 
@@ -265,7 +265,11 @@ Before closing the `QILIPSU` vault for unattended field operation, transition th
 
 ![3-Zone Covert Split-Pod Field Camera Unit in Context](images/product_units_in_context.jpg)
 
-### Step 6.1 — Strap Zone 1 to the Pine Trunk & Bury + Insulate Zone 3 Underground
+![Stage 6 Outdoor Field Test: Exact Tree & Trail Terrain to Select](images/real_build/stage6_outdoor_trail_terrain_cutaway_v4.jpg)
+
+![Stage 6 Outdoor Trail Test (15 Min): Step-by-Step With Your Assembled Real Gear](images/real_build/stage6_real_hardware_trail_test_guide_v2.jpg)
+
+### Step 6.1 — Strap Zone 1 to the Pine Trunk (or Stand on Tripod for Rapid Trail Validation) & Bury + Insulate Zone 3 Underground
 
 1. **Pick the Right Tree (`3–5 meters` off the trail edge):**
    * Choose a mature pine or spruce tree (`>25 cm` trunk diameter) growing on a slightly raised, free-draining root hummock (*mätäs*) with deep vertical bark grooves and low branches that shade the trunk from direct sky view.

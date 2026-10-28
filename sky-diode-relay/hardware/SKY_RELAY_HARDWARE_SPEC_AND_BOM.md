@@ -49,24 +49,28 @@ Because every RF component uses threaded `SMA` / `Type-N` coaxial connectors and
 
 > [!CAUTION]
 > **Two Golden Rules Before Applying `+5.0V` Power (`SE2576L-EK1` & `SKY65405-21EK1`):**
-> 1. **Always Connect the `50 Ω` Antenna Load First:** Screw the `HG2414P` antenna (or a `50 Ω` load) onto the `SE2576L-EK1` output **before** turning on the `LS50-5` `+5.0V` supply or asserting `PA_EN`. Never fire a `+30 dBm` (`1 W`) RF power amplifier into an open, disconnected `SMA` jack.
-> 2. **`PA_EN` (`C0`/`C1`) and `VEN` Are `3.3 V` Logic Pins (`3.6 V` Max — NEVER Connect to `+5.0 V`!):** On the `Skyworks SE2576L-EK1` PA, only the main `VCC` rail takes `+5.0 V`; its logic enable pins (`PA_EN` / `C0` & `C1`, datasheet `1.8–3.3 V` operating, `3.6 V` abs max) MUST be driven from **`Pico 2 H #1 GP3` (`3.3 V` GPIO)**. Likewise, on the `Skyworks SKY65405-21EK1` LNA, `VDD` takes `+5.0 V`, while `VEN` (`2.8 V` typ / `3.5 V` max) MUST be wired to **`Pico 2 H #2 Pin 36` (`3V3_OUT`, `3.3 V`)**. Tying `PA_EN` or `VEN` directly to `+5.0 V` will permanently damage the CMOS bias controller.
+> 1. **Always Connect the `50 Ω` Antenna Load First:** Screw the `HG2414P` antenna (or a `50 Ω` load) onto the `SE2576L-EK1` output **before** turning on the `+5.0V` supply (`Pico 2 H Pin 40 VBUS` or `LS50-5`) or asserting `PA_EN`. Never fire a `+30 dBm` (`1 W`) RF power amplifier into an open, disconnected `SMA` jack.
+> 2. **`PA_EN` (`J4 Pin 1`) and `LNA_EN` (`Pin 4`) Are `3.3 V` Logic Pins (`3.6 V` Max — NEVER Connect to `+5.0 V`!):** On the `Skyworks SE2576L-EK1` PA, only the main `J3 VCC` rail takes `+5.0 V`; its logic enable pin (`J4 Pin 1 PA_EN`, datasheet `1.8–3.3 V` operating, `3.6 V` abs max) MUST be driven from **`Pico 2 H #1 Pin 36` (`3V3_OUT`, `3.3 V`)** (or `GP3` for duty-cycled keying). Likewise, on the `Skyworks SKY65405-21EK1` LNA, `Pin 1 (LNA_VDD)` takes `+5.0 V`, while `Pin 4 (LNA_EN)` (`2.8 V` typ / `3.5 V` max) MUST be wired to **`Pico 2 H #2 Pin 36` (`3V3_OUT`, `3.3 V`)**.On the pre-wired bench/field kit, both `Pico 2 H #1` and `Pico 2 H #2` use the exact same 3 adjacent odd/even header pins on the USB-right edge—**`Pin 40` (`VBUS +5.0V`, Red wire)**, skip `Pin 39`, **`Pin 38` (`GND`, Black wire)**, skip `Pin 37`, and **`Pin 36` (`3V3_OUT +3.3V`, Yellow wire on TX PA / Blue wire on RX LNA)**—so plugging the `Pico 2 H` and `ADALM-PLUTO` USB-A cables into the host (`Raspberry Pi 5` on TX; laptop on RX) powers the entire RF chain immediately with zero external AC/DC bricks.
 
 ---
 
 ## 3. Exact Coaxial & DC Pinout Schedule (`Build D`)
 
+![Exact Identification of the 3 Sky-Diode TX Chain Devices + Pico 2 H #1 in Real Hardware Photos](../docs/images/sky_diode_3_tx_devices_real_photos_v5.jpg)
+
 ### 3.1 Transmitter (`TX`) Chain (`+42.5 dBm` EIRP across `2380 / 2488 / 2459 MHz`)
 ```
 [Raspberry Pi 5 / Pico 2 H #1 (SC1632)]
        │ • USB / UART (SKFG FEC + Keyed-FHSS Schedule: 2380.373 / 2487.818 / 2459.116 MHz)
-       │ • Pico 2 H #1 GP3 (Pin 5, 3.3V CMOS Logic) ──► SE2576L-EK1 PA_EN (C0/C1, 3.6V Max — NEVER +5.0V!)
+       │ • Pico 2 H #1 Pin 40 (VBUS +5.0V, Red) ──► SE2576L-EK1 J3 VCC (+5.0V)
+       │ • Pico 2 H #1 Pin 38 (GND, Black)      ──► SE2576L-EK1 J3 GND
+       │ • Pico 2 H #1 Pin 36 (3V3_OUT, Yellow) ──► SE2576L-EK1 J4 Pin 1 PA_EN (3.3V CMOS, 3.6V Max — NEVER +5.0V!)
        ▼
 [Analog Devices ADALM-PLUTO #1] ──(TX Out: +2.0 dBm Licensed / +7.5 dBm Civilian, SMA-F)
        │
        │ Cinch Johnson 415-0029-012 (12" RG-142 SMA-M to SMA-M Jumper #1)
        ▼
-[Skyworks SE2576L-EK1 1W PA] ──(VCC: +5.0V from LS50-5 #1 | PA_EN: 3.3V from Pico 2 GP3 | GND: Common GND)
+[Skyworks SE2576L-EK1 1W PA] ──(VCC: +5.0V from Pico #1 Pin 40 VBUS or LS50-5 #1 | PA_EN: 3.3V from Pin 36/GP3 | GND: Pin 38)
        │ RFOUT (+30.0 dBm / 1.0 W, SMA-F)
        ▼ (Direct SMA-M to SMA-F Thread)
 [Mini-Circuits VBF-2435+ Bandpass Filter (2370–2500 MHz)]
@@ -92,7 +96,7 @@ Because every RF component uses threaded `SMA` / `Type-N` coaxial connectors and
 [Mini-Circuits VBF-2435+ Bandpass Filter (2370–2500 MHz)] ──(Blocks Out-of-Band Jammers BEFORE LNA!)
        │ Filter Out (SMA-M)
        ▼ (Direct SMA-M to SMA-F Thread)
-[Skyworks SKY65405-21EK1 Ultra-Low-Noise Amplifier] ──(VDD: +5.0V from LS50-5 #2 | VEN: 3.3V from Pico 2 Pin 36 3V3_OUT — NEVER +5.0V!)
+[Skyworks SKY65405-21EK1 Ultra-Low-Noise Amplifier] ──(LNA_VDD Pin 1: +5.0V from Pico #2 Pin 40 VBUS or LS50-5 #2 | GND Pin 2: Pin 38 | LNA_EN Pin 4: 3.3V from Pin 36 3V3_OUT — NEVER +5.0V!)
        │ RFOUT (+15.0 dB Gain, 1.2 dB NF, +29 dBm OIP3)
        │
        │ Cinch Johnson 415-0029-012 (12" RG-142 SMA-M to SMA-M Jumper #4)
