@@ -289,7 +289,7 @@ def run_resilience_test_suite():
         assert 'os.environ["COPYFILE_DISABLE"] = "1"' in bcontent
         assert "purge_macos_metadata" in bcontent
 
-        # Verify Boot-Order & Power-Glitch Optical Diode Hardening (RP1 GPIO 42 VBUS cycle + IPv6 ff02::1 multicast)
+        # Verify Boot-Order & Power-Glitch Optical Diode Hardening (RP1 GPIO 32 ETH_RST_N + IPv6 ff02::1 multicast)
         from unittest.mock import patch, MagicMock
         sys.path.insert(0, os.path.join(pkg_root, "pi5_sender_node"))
         import sender_node
@@ -297,11 +297,27 @@ def run_resilience_test_suite():
         assert hasattr(receiver_hub, "_join_ipv6_all_nodes_multicast"), "Missing _join_ipv6_all_nodes_multicast in receiver_hub"
         with patch.object(sender_node.subprocess, "run") as mock_sub_run, patch.object(sender_node, "wait_for_ethernet_carrier", return_value=True):
             mock_sub_run.return_value = MagicMock(returncode=0)
-            retrig_ok = sender_node.renegotiate_optical_diode_link(iface="eth0", force_usb_cycle=True, down_hold_s=0.1)
+            retrig_ok = sender_node.renegotiate_optical_diode_link(iface="eth0", force_phy_reset=True, down_hold_s=0.1)
             assert retrig_ok is True
             called_cmds = [c.args[0] for c in mock_sub_run.call_args_list if c.args]
-            assert ["pinctrl", "set", "42", "op", "dl"] in called_cmds
-            assert ["pinctrl", "set", "42", "a2"] in called_cmds
+            assert ["pinctrl", "set", "32", "op", "dl"] in called_cmds
+            assert ["pinctrl", "set", "32", "op", "dh"] in called_cmds
+
+        # Enforce permanent architectural guardrails & comments so future refactoring never removes them:
+        with open(os.path.join(pkg_root, "pi5_sender_node", "sender_node.py"), "r", encoding="utf-8") as sf:
+            s_code = sf.read()
+        assert "CRITICAL ARCHITECTURAL INVARIANTS (DO NOT REMOVE OR BREAK DURING REFACTORING)" in s_code
+        assert 'os.environ.setdefault("OMP_NUM_THREADS", "1")' in s_code
+        assert "cv2.setNumThreads(1)" in s_code
+
+        with open(os.path.join(pkg_root, "collector_hub", "dashboard_server.py"), "r", encoding="utf-8") as df_srv:
+            d_code = df_srv.read()
+        assert "CRITICAL OPERATOR-UI TRUTHFULNESS INVARIANT" in d_code
+        assert "MAX_LIVE_FRAME_AGE_SEC" in d_code
+
+        with open(os.path.join(pkg_root, "collector_hub", "ui", "index.html"), "r", encoding="utf-8") as uf:
+            u_code = uf.read()
+        assert "NO LIVE CAMERA SIGNAL (OPTICAL DIODE LINK OFFLINE)" in u_code
 
         print("    [+] Real-World Photo Build Sheets (Photos 1–58), Hole Map, Boot-Order Hardening & macOS Anti-Metadata: PASSED")
         test_passed += 1

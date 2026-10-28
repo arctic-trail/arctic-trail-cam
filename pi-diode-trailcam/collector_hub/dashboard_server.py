@@ -1360,6 +1360,24 @@ def make_command_center_handler(alerts_dir, verbose=False, demo_mode=False):
                 return
 
             if clean_path == "/api/live_frame":
+                # ==========================================================================
+                # CRITICAL OPERATOR-UI TRUTHFULNESS INVARIANT (DO NOT REMOVE OR RELAX):
+                # ==========================================================================
+                # 1. NEVER DISPLAY A STALE, CACHED, OR SIMULATED IMAGE AS "LIVE":
+                #    Previously, if LIVE_FRAME_STATE["meta"] was None or stale after the
+                #    camera/fiber link went down, reading an old live_frame.json from disk
+                #    and setting active=(meta is not None) without checking age_sec caused
+                #    the UI to freeze on an old picture while claiming "LIVE 1080p".
+                #    -> A frame is ONLY active when age_sec <= MAX_LIVE_FRAME_AGE_SEC (18s).
+                #    -> When age_sec > MAX_LIVE_FRAME_AGE_SEC, we MUST bypass the
+                #       changed=False fast-path and return active=False, frame=None so the
+                #       browser immediately clears the canvas and shows the red OFFLINE
+                #       banner.
+                # 2. LOCAL EDGE AI DETECTIONS COME FROM THE BURIED PI 5 VAULT:
+                #    When inference_backend == 'pi5_local_edge_ai', object detection was
+                #    performed locally on the Raspberry Pi 5 inside the field vault prior to
+                #    Ed25519 signing and optical diode transmission.
+                # ==========================================================================
                 from urllib.parse import parse_qs
                 qs = parse_qs(parsed.query)
                 since_seq_str = (qs.get("since_seq") or [""])[0].strip()
@@ -1370,26 +1388,67 @@ def make_command_center_handler(alerts_dir, verbose=False, demo_mode=False):
                 self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
+                now_ts = time.time()
+                MAX_LIVE_FRAME_AGE_SEC = 18.0
                 with LIVE_FRAME_LOCK:
                     meta = LIVE_FRAME_STATE["meta"]
                     updated_at = LIVE_FRAME_STATE["updated_at"]
                     seq = LIVE_FRAME_STATE["seq"]
                     src = LIVE_FRAME_STATE.get("source", "pi_camera")
 
-                # Fast-path: if frame sequence has not changed since client's last poll, return 35-byte response!
-                if since_seq >= 0 and seq == since_seq and meta is not None:
-                    self.wfile.write(json.dumps({"active": True, "changed": False, "seq": seq}).encode("utf-8"))
-                    return
-                if meta is None:
-                    lf_path = os.path.join(alerts_dir, "live_frame.json")
-                    if os.path.isfile(lf_path):
-                        try:
+                # Also check if receiver_hub.py wrote a newer live_frame.json on disk via UDP 5514
+                lf_path = os.path.join(alerts_dir, "live_frame.json")
+                jpg_path = os.path.join(alerts_dir, "live_frame.jpg")
+                if os.path.isfile(lf_path):
+                    try:
+                        disk_mtime = os.path.getmtime(lf_path)
+                        if disk_mtime > updated_at:
                             with open(lf_path, "r", encoding="utf-8") as lf:
                                 meta = json.load(lf)
-                            updated_at = os.path.getmtime(lf_path)
-                        except Exception:
-                            meta = None
-                active = meta is not None
+                            jpeg_bytes = None
+                            if os.path.isfile(jpg_path):
+                                with open(jpg_path, "rb") as jf:
+                                    jpeg_bytes = jf.read()
+                            if (
+                                jpeg_bytes
+                                and GLOBAL_DETECTOR is not None
+                                and (meta or {}).get("inference_backend") != "pi5_local_edge_ai"
+                            ):
+                                try:
+                                    ov_dets, ov_ms = GLOBAL_DETECTOR.detect_on_jpeg(
+                                        jpeg_bytes, meta.get("detections")
+                                    )
+                                    if ov_dets is not None:
+                                        meta["detections"] = ov_dets
+                                        meta["standing_count"] = len(ov_dets)
+                                        if ov_ms > 0:
+                                            meta["ov_ms"] = ov_ms
+                                except Exception:
+                                    pass
+                            updated_at = disk_mtime
+                            seq = int(disk_mtime * 1000)
+                            with LIVE_FRAME_LOCK:
+                                LIVE_FRAME_STATE["meta"] = meta
+                                if jpeg_bytes:
+                                    LIVE_FRAME_STATE["jpeg"] = jpeg_bytes
+                                LIVE_FRAME_STATE["updated_at"] = updated_at
+                                LIVE_FRAME_STATE["seq"] = seq
+                    except Exception:
+                        pass
+
+                age_sec = (now_ts - updated_at) if updated_at > 0 else 999999.0
+                active = (meta is not None) and (age_sec <= MAX_LIVE_FRAME_AGE_SEC)
+
+                # Fast-path ONLY when the stream is genuinely active (<= MAX_LIVE_FRAME_AGE_SEC) and unchanged
+                if active and since_seq >= 0 and seq == since_seq:
+                    self.wfile.write(json.dumps({
+                        "active": True,
+                        "changed": False,
+                        "seq": seq,
+                        "age_sec": round(age_sec, 1),
+                    }).encode("utf-8"))
+                    return
+
                 with SMART_CAPTURE_LOCK:
                     _, _, caps = _load_smart_captures(alerts_dir)
                     auto_en = SMART_CAPTURE_STATE["auto_enabled"]
@@ -1398,10 +1457,12 @@ def make_command_center_handler(alerts_dir, verbose=False, demo_mode=False):
                     cam_ctrl_copy = dict(CAMERA_CONTROL_STATE)
                 self.wfile.write(json.dumps({
                     "active": active,
-                    "seq": seq,
+                    "stale": not active,
+                    "age_sec": round(age_sec, 1) if updated_at > 0 else None,
+                    "seq": seq if active else 0,
                     "source": src,
-                    "updated_at": updated_at,
-                    "frame": meta,
+                    "updated_at": updated_at if updated_at > 0 else None,
+                    "frame": meta if active else None,
                     "cam_ctrl": cam_ctrl_copy,
                     "smart_captures": {
                         "auto_enabled": auto_en,
@@ -1451,14 +1512,20 @@ def make_command_center_handler(alerts_dir, verbose=False, demo_mode=False):
                 return
 
             if clean_path == "/api/live_frame.jpg":
+                # Strict hardware freshness gate: never serve a stale/cached JPEG when link is down
+                now_ts = time.time()
+                MAX_LIVE_FRAME_AGE_SEC = 18.0
                 with LIVE_FRAME_LOCK:
                     jpeg_bytes = LIVE_FRAME_STATE["jpeg"]
-                if not jpeg_bytes:
+                    mem_updated = LIVE_FRAME_STATE["updated_at"]
+                if not jpeg_bytes or (now_ts - mem_updated) > MAX_LIVE_FRAME_AGE_SEC:
+                    jpeg_bytes = None
                     jpg_path = os.path.join(alerts_dir, "live_frame.jpg")
                     if os.path.isfile(jpg_path):
                         try:
-                            with open(jpg_path, "rb") as jf:
-                                jpeg_bytes = jf.read()
+                            if (now_ts - os.path.getmtime(jpg_path)) <= MAX_LIVE_FRAME_AGE_SEC:
+                                with open(jpg_path, "rb") as jf:
+                                    jpeg_bytes = jf.read()
                         except Exception:
                             jpeg_bytes = None
                 if jpeg_bytes:
@@ -1469,7 +1536,7 @@ def make_command_center_handler(alerts_dir, verbose=False, demo_mode=False):
                     self.end_headers()
                     self.wfile.write(jpeg_bytes)
                     return
-                self.send_error(404, "No live frame available")
+                self.send_error(404, "No active live frame (camera offline or optical link down)")
                 return
 
             # 5. Root page -> index.html

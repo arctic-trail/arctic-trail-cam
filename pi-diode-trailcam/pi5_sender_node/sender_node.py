@@ -12,6 +12,47 @@ import hashlib
 import secrets
 import math
 import subprocess
+# ==============================================================================
+# CRITICAL ARCHITECTURAL INVARIANTS (DO NOT REMOVE OR BREAK DURING REFACTORING):
+# ==============================================================================
+# 1. LOCAL EDGE AI OBJECT DETECTION (NO CONTINUOUS RAW VIDEO STREAMING):
+#    The core purpose of this node is to run AI object detection (YOLOv8n /
+#    Hailo-8L / OpenCV DNN) LOCALLY inside the buried field vault upon a Pico 2
+#    radar/magnetometer wake trigger, and transmit ONLY verified, Ed25519-signed
+#    alert bursts over the physically one-way optical diode. Never refactor this
+#    node into a continuous raw video streamer that offloads detection to the hub.
+#
+# 2. SINGLE-CORE CPU THREAD CAP ON 12V BATTERY POWER (PREVENT PMIC 4.63V UVLO):
+#    When powered from a cold-soaked (-18C) or partially depleted 12V AGM battery
+#    via the 12V->5V buck converter while StarTech Media Converter #1 (~0.5A),
+#    Arducam CSI-to-HDMI (~0.3A), Active Cooler, and Pico 2 + Radar are attached,
+#    uncapped 4-core Cortex-A76 (2.4 GHz) OpenMP/BLAS/OpenCV inference spikes
+#    5V current to ~3.8A-4.2A (~20W). The resulting I*R voltage drop across the
+#    USB-C supply cable dips 5V_SYS below the Raspberry Pi 5 DA9091 PMIC's 4.63V
+#    Under-Voltage Lockout (UVLO) threshold, immediately latching the Pi 5 into
+#    Red-LED Standby!
+#    -> ALWAYS keep OMP_NUM_THREADS=1, OPENBLAS_NUM_THREADS=1, MKL_NUM_THREADS=1,
+#       and cv2.setNumThreads(1) enforced BEFORE importing numpy/cv2 so local AI
+#       inference draws a gentle ~0.45A single-core load with zero UVLO risk.
+#
+# 3. ZERO-INRUSH OPTICAL HANDSHAKE VIA RP1 GPIO 32 (ETH_RST_N), NEVER GPIO 42:
+#    Never toggle RP1 GPIO 42 (USB_VBUS_EN, +5V USB power switch) in a runtime
+#    loop while StarTech Media Converter #1 is plugged into the Pi 5 USB port on
+#    battery power: its 470 uF barrel-jack input capacitor causes a >3.5A inrush
+#    surge that trips the Pi 5 PMIC into Red-LED Standby and browns out the Pico 2
+#    on usb3-port2. Always use RP1 GPIO 32 (ETH_RST_N, logic-level Gigabit PHY
+#    reset, 0.00A 5V surge) with Field Box #1's front LFP switch set to ON (UP).
+#
+# 4. STRICTLY ONE-WAY OPTICAL DIODE VS. STAGE 5.5 RF LOCKDOWN:
+#    The outbound optical fiber (Field Box #1 TX -> 1x2 Splitter -> Collector Box #2
+#    RX, with Collector Box #2 TX physically empty) is 100% physically one-way.
+#    Any Wi-Fi/SSH access exists ONLY during indoor bench bring-up (Stages 1-5.4)
+#    and is permanently disabled in hardware by Step 5.5 (install_pi5_fastboot.sh:
+#    dtoverlay=disable-wifi & dtoverlay=disable-bt).
+# ==============================================================================
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
 try:
     import serial
 except ImportError:
@@ -22,6 +63,10 @@ except ImportError:
     np = None
 try:
     import cv2
+    try:
+        cv2.setNumThreads(1)
+    except Exception:
+        pass
 except ImportError:
     cv2 = None
 from nacl.signing import SigningKey
@@ -581,83 +626,53 @@ def setup_unidirectional_network():
     return iface
 
 
-def renegotiate_optical_diode_link(iface=None, force_usb_cycle=None, down_hold_s=0.85):
+def renegotiate_optical_diode_link(iface=None, force_phy_reset=None, down_hold_s=0.65):
     """
-    Boot-Order & Power-Glitch Hardening for Buried Unidirectional Optical Diodes:
-    Forces Field Media Converter #1 (StarTech MCMGBSCSM10) inside the buried vault to re-emit
-    its 0.5-second IEEE 802.3z Clause 37 (/C/) 1000BASE-X optical auto-negotiation handshake
-    burst down the fiber so that if Collector Media Converter #2 on the surface boots later
-    or recovers from an intermittent power glitch, Collector Box #2 automatically relocks its
-    Top-Left 1000M Fiber Link LED without any human touching the buried vault:
-      1. Layer 1 (RP1 GPIO 42 `USB_VBUS_EN` Hardware VBUS Power-Cycle via `pinctrl`):
-         Directly drives the Raspberry Pi 5's RP1 USB VBUS load switch (`GPIO 42`) low for
-         `down_hold_s` seconds (`pinctrl set 42 op dl`) and restores `VBUS_EN1` (`pinctrl set 42 a2`).
-         Works 100% unprivileged (via `gpio` group `/dev/gpiomem*`), physically cutting and
-         restoring +5.0V DC to the `StarTech USB2TYPEM` barrel cable so Field Box #1 cold-boots
-         from 0.00V and blasts a fresh `/C/` optical handshake regardless of its LFP switch state.
-      2. Layer 2 (uhubctl / sysfs USB Port Power Control + LFP Copper Carrier Pulse):
-         Falls back to `uhubctl`, sysfs `usb*-port*/disable`, `ETH_RST_N` (`GPIO 32`), and
-         `ip link set <iface> down/up` + `ethtool -r <iface>`.
+    Zero-Inrush Boot-Order & Power-Glitch Hardening for Buried Unidirectional Optical Diodes:
+    Forces Field Media Converter #1 (StarTech MCMGBSCSM10, with front LFP switch set to ON/UP)
+    inside the buried vault to re-emit its 0.5-second IEEE 802.3z Clause 37 (/C/) 1000BASE-X
+    optical auto-negotiation handshake burst down the fiber WITHOUT cycling the +5V USB VBUS
+    power rail (avoiding capacitive inrush brownouts on the Pi 5 PMIC):
+      1. Layer 1 (RP1 GPIO 32 `ETH_RST_N` Logic-Level Gigabit PHY Reset via `pinctrl`):
+         Pulses the Raspberry Pi 5's BCM54213PE Ethernet PHY hardware reset line (`GPIO 32`)
+         low for `down_hold_s` seconds (`pinctrl set 32 op dl`) and back high (`pinctrl set 32 op dh`).
+         Works 100% unprivileged (via `gpio` group `/dev/gpiomem*`) with 0.00A 5V rail surge.
+         While `eth0` copper carrier is down for 0.65s, Field Box #1 (with `LFP=ON`) turns off
+         its 1310 nm TX laser (resetting both its 50% loopback and Collector Box #2 RX), and
+         when `GPIO 32` goes high, Field Box #1 blasts a fresh `/C/` optical handshake burst!
+      2. Layer 2 (Fallback `ip link set <iface> down/up` + `ethtool -r <iface>`):
+         Standard kernel link/auto-negotiation restart when running as root.
     """
     if iface is None:
         iface = find_primary_ethernet_interface()
-    if force_usb_cycle is None:
-        force_usb_cycle = os.getenv("DIODE_USB_CYCLE", "1") != "0"
+    if force_phy_reset is None:
+        force_phy_reset = os.getenv("DIODE_PHY_RESET", "1") != "0"
 
     retriggered = False
-    if force_usb_cycle:
-        # 1a. Primary Raspberry Pi 5 RP1 GPIO 42 (USB_VBUS_EN) hardware load-switch power cycle
+    if force_phy_reset:
+        # 1. Primary Raspberry Pi 5 RP1 GPIO 32 (ETH_RST_N) logic-level PHY reset (0.00A 5V surge)
         try:
             res_off = subprocess.run(
-                ["pinctrl", "set", "42", "op", "dl"],
+                ["pinctrl", "set", "32", "op", "dl"],
                 check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2
             )
             if res_off.returncode == 0:
                 time.sleep(max(0.1, float(down_hold_s)))
                 subprocess.run(
-                    ["pinctrl", "set", "42", "a2"],
+                    ["pinctrl", "set", "32", "op", "dh"],
                     check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2
                 )
                 retriggered = True
         except Exception:
             try:
                 subprocess.run(
-                    ["pinctrl", "set", "42", "a2"],
+                    ["pinctrl", "set", "32", "op", "dh"],
                     check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2
                 )
             except Exception:
                 pass
 
-        # 1b. Fallback uhubctl on Raspberry Pi 5 RP1 root hubs (usb1 / usb3)
-        if not retriggered:
-            for hub_loc in ("1", "3"):
-                try:
-                    res = subprocess.run(
-                        ["uhubctl", "-l", hub_loc, "-a", "cycle", "-d", "1"],
-                        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=4
-                    )
-                    if res.returncode == 0:
-                        retriggered = True
-                except Exception:
-                    pass
-        # 1c. Fallback kernel sysfs port disable/enable on usb1-port1 / usb2-port1
-        if not retriggered:
-            for sys_port in (
-                "/sys/bus/usb/devices/usb1/1-0:1.0/usb1-port1/disable",
-                "/sys/bus/usb/devices/usb2/2-0:1.0/usb2-port1/disable",
-            ):
-                if os.path.exists(sys_port):
-                    try:
-                        with open(sys_port, "w", encoding="utf-8") as f:
-                            f.write("1\n")
-                        time.sleep(max(0.1, float(down_hold_s)))
-                        with open(sys_port, "w", encoding="utf-8") as f:
-                            f.write("0\n")
-                        retriggered = True
-                    except Exception:
-                        pass
-
-    # 2. LFP-coupled copper carrier pulse (ip link down -> hold -> up + ethtool -r)
+    # 2. Fallback LFP-coupled copper carrier pulse (ip link down -> hold -> up + ethtool -r)
     if not retriggered:
         try:
             res_down = subprocess.run(
@@ -679,7 +694,35 @@ def renegotiate_optical_diode_link(iface=None, force_usb_cycle=None, down_hold_s
             pass
 
     setup_unidirectional_network()
-    wait_for_ethernet_carrier(iface=iface, timeout_s=4.0)
+    # CRITICAL TIMING INVARIANT (Verified via Raspberry Pi 5 kernel dmesg):
+    # - After releasing RP1 GPIO 32 (ETH_RST_N -> op dh), BCM54213PE + StarTech Box #1 (LFP=ON)
+    #   require ~4.10 seconds to complete 1000BASE-T / 1000BASE-X auto-negotiation ("Link is Up").
+    # - Once carrier=1, Linux attaches fe80:: to /proc/net/if_inet6 immediately with flag 0x40
+    #   (IFA_F_TENTATIVE) for ~1.3 seconds during IPv6 Duplicate Address Detection (DAD).
+    #   Calling sendto('ff02::1%eth0') while 0x40 is set fails with Errno 99 (Cannot assign
+    #   requested address). Therefore, wait up to 6.5s for carrier and up to 2.5s for non-tentative
+    #   (flags & 0x40 == 0) IPv6 link-local readiness.
+    wait_for_ethernet_carrier(iface=iface, timeout_s=6.5)
+    if down_hold_s >= 0.4:
+        deadline_v6 = time.time() + 2.5
+        while time.time() < deadline_v6:
+            try:
+                if os.path.exists("/proc/net/if_inet6"):
+                    ready_v6 = False
+                    with open("/proc/net/if_inet6", "r", encoding="utf-8") as f6:
+                        for line in f6:
+                            parts = line.strip().split()
+                            if len(parts) >= 6 and parts[5] == iface:
+                                if (int(parts[4], 16) & 0x40) == 0:
+                                    ready_v6 = True
+                                    break
+                    if ready_v6:
+                        break
+                else:
+                    break
+            except Exception:
+                break
+            time.sleep(0.15)
     return retriggered
 
 def wait_for_ethernet_carrier(iface=None, timeout_s=3.0):

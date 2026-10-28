@@ -1442,6 +1442,8 @@
       });
     }
 
+    let offlineAgeSec = null;
+
     function renderLiveFrameToCanvas() {
       const W = camCanvas.width;
       const H = camCanvas.height;
@@ -1449,9 +1451,25 @@
       camCtx.fillRect(0, 0, W, H);
 
       if (!latestFrameImg) {
+        camCtx.strokeStyle = 'rgba(239, 68, 68, 0.55)';
+        camCtx.lineWidth = 3;
+        camCtx.strokeRect(40, H / 2 - 90, W - 80, 180);
+        camCtx.fillStyle = 'rgba(239, 68, 68, 0.08)';
+        camCtx.fillRect(40, H / 2 - 90, W - 80, 180);
+
+        camCtx.fillStyle = '#ef4444';
+        camCtx.font = '700 28px -apple-system, BlinkMacSystemFont, sans-serif';
+        camCtx.fillText('🔴 NO LIVE CAMERA SIGNAL (OPTICAL DIODE LINK OFFLINE)', 75, H / 2 - 24);
+
+        camCtx.fillStyle = '#cbd5e1';
+        camCtx.font = '500 20px -apple-system, BlinkMacSystemFont, sans-serif';
+        const ageText = (offlineAgeSec !== null && offlineAgeSec < 86400)
+          ? `Last verified frame arrived ${Math.round(offlineAgeSec)}s ago — waiting for UDP :5514 / ff02::1 optical packets...`
+          : 'Waiting for live Ed25519-signed packets from Raspberry Pi 5 over optical fiber (UDP :5514)...';
+        camCtx.fillText(ageText, 75, H / 2 + 24);
         camCtx.fillStyle = '#94a3b8';
-        camCtx.font = '500 24px -apple-system, sans-serif';
-        camCtx.fillText('Connecting to live Pi 5 camera stream...', 70, H / 2);
+        camCtx.font = '400 17px -apple-system, BlinkMacSystemFont, sans-serif';
+        camCtx.fillText('Zero stale or cached images are ever displayed when the live link is offline.', 75, H / 2 + 60);
         return;
       }
 
@@ -1533,8 +1551,27 @@
         const res = await fetch(`/api/live_frame?since_seq=${lastSeq}`);
         if (res.ok) {
           const data = await res.json();
+          if (data.active === false) {
+            offlineAgeSec = (typeof data.age_sec === 'number') ? data.age_sec : null;
+            if (latestFrameImg !== null || lastSeq !== -1) {
+              latestFrameImg = null;
+              liveDetections = [];
+              lastSeq = -1;
+              renderDetectedPillsInPlace();
+            }
+            renderLiveFrameToCanvas();
+            const topMetrics = document.getElementById('top-live-metrics');
+            if (topMetrics) {
+              topMetrics.textContent = (offlineAgeSec !== null && offlineAgeSec < 86400)
+                ? `🔴 OFFLINE (Last RX ${Math.round(offlineAgeSec)}s ago)`
+                : '🔴 OFFLINE • NO SIGNAL';
+              topMetrics.style.color = '#ef4444';
+            }
+            return;
+          }
           if (data.changed === false) return;
           if (data.active && data.frame && data.seq !== lastSeq) {
+            offlineAgeSec = 0;
             lastSeq = data.seq;
             const f = data.frame;
             const img = new Image();
@@ -1545,7 +1582,10 @@
               renderLiveFrameToCanvas();
 
               const topMetrics = document.getElementById('top-live-metrics');
-              if (topMetrics) topMetrics.textContent = `LIVE 1080p • ${f.stream_fps || 12} FPS`;
+              if (topMetrics) {
+                topMetrics.textContent = `LIVE 1080p • ${f.stream_fps || 12} FPS`;
+                topMetrics.style.color = '';
+              }
               const yoloEl = document.getElementById('telem-yolo');
               if (yoloEl) yoloEl.textContent = `${f.pi5_ms || 190} ms`;
 

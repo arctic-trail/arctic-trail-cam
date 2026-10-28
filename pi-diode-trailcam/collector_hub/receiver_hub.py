@@ -26,10 +26,32 @@ except ModuleNotFoundError:
 import base64
 
 # ==============================================================================
-# Configuration & Security Parameters
+# CRITICAL ARCHITECTURAL INVARIANTS (DO NOT REMOVE OR BREAK DURING REFACTORING):
+# ==============================================================================
+# 1. CANONICAL ABSOLUTE OUT_DIR RESOLUTION (NEVER USE RELATIVE './verified_alerts'):
+#    If receiver_hub.py is launched as a daemon with cwd='/' (e.g. via nohup or
+#    launchd), a relative './verified_alerts' resolves to '/verified_alerts' on the
+#    read-only macOS root filesystem and crashes with Errno 30 (EROFS). Always
+#    resolve OUT_DIR relative to _REPO_ROOT so both receiver_hub.py and
+#    dashboard_server.py share the exact same verified_alerts directory regardless
+#    of process working directory.
+#
+# 2. ZERO-CONFIG DUAL-STACK IPv6 LINK-LOCAL MULTICAST (ff02::1) + IPv4 (UDP 5514):
+#    Across a physically one-way optical fiber (Collector Box #2 TX empty), DHCP
+#    and bidirectional ARP can never complete. When either box power-cycles, OS
+#    network managers drop temporary IPv4 addresses. Therefore, run_hub() MUST
+#    bind BOTH IPv4 (0.0.0.0:5514) and IPv6 ([::]:5514) and continuously re-join
+#    the RFC 4291 All-Nodes Link-Local Multicast group (ff02::1, Ethernet MAC
+#    33:33:00:00:00:01) every 2 seconds across all active interfaces.
+#
+# 3. ATOMIC LIVE_FRAME BRIDGE FOR DASHBOARD_SERVER.PY:
+#    Whenever try_reconstruct_image() verifies a complete Ed25519 + SHA-256 alert
+#    frame, it MUST atomically update live_frame.jpg and live_frame.json inside
+#    OUT_DIR so dashboard_server.py reflects the real incoming optical diode frame.
 # ==============================================================================
 UDP_PORT = int(os.getenv("UDP_PORT", "5514"))
-OUT_DIR = os.getenv("OUT_DIR", "./verified_alerts")
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUT_DIR = os.getenv("OUT_DIR", os.path.join(_REPO_ROOT, "verified_alerts"))
 CHUNK_TTL_SECONDS = 15.0     # Maximum time to hold partial frames in memory
 MAX_CLOCK_SKEW_SEC = int(os.getenv("MAX_CLOCK_SKEW_SEC", "300"))  # Max clock drift threshold
 STRICT_CLOCK_SKEW = os.getenv("STRICT_CLOCK_SKEW", "0") == "1"    # Drop vs warn on off-grid clock skew
@@ -331,6 +353,21 @@ def try_reconstruct_image(prefix):
                     jf.write(json.dumps(alert_entry) + "\n")
                     jf.flush()
                     os.fsync(jf.fileno())
+                # Also update live_frame.jpg and live_frame.json atomically so dashboard_server.py
+                # displays the real incoming optical diode frame while packets are actively arriving.
+                live_meta = {
+                    "node": node_id,
+                    "ts": ts,
+                    "updated_at": time.time(),
+                    "nonce": nonce_val,
+                    "img_sha256": computed_sha256,
+                    "detections": meta.get("detections", []),
+                    "pico_trig": meta.get("pico_trig", ""),
+                    "stream_fps": meta.get("stream_fps", 1.0),
+                    "pi5_ms": meta.get("pi5_ms", 180),
+                }
+                _atomic_write_bytes(os.path.join(OUT_DIR, "live_frame.jpg"), full_img)
+                _atomic_write_bytes(os.path.join(OUT_DIR, "live_frame.json"), json.dumps(live_meta).encode("utf-8"))
                 commit_seen_nonce(node_id, ts, nonce_val, out_dir=OUT_DIR)
                 print(f"    [+] Image verified ({len(full_img)} bytes) -> Saved to {fname}")
             except OSError as e:
