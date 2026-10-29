@@ -1367,6 +1367,49 @@ def should_continue_warm_hold_loop(
 # ==============================================================================
 # Main Pipeline with Strict Fault Recovery
 # ==============================================================================
+def correct_noir_daylight_bgr(bgr_frame: np.ndarray) -> np.ndarray:
+    """
+    Fast (<1.5 ms) sky-safe NoIR Daylight Color & Dehaze Correction for IMX708 NoIR:
+    - Only activates on daytime color frames where Near-Infrared (750-950 nm) sunlight
+      causes red/blue crosstalk (making dark clothes lavender and green foliage pinkish-grey).
+    - Leaves night-vision 940 nm monochrome IR frames and bright sky highlights untouched.
+    """
+    if bgr_frame is None or bgr_frame.ndim != 3 or bgr_frame.shape[2] != 3:
+        return bgr_frame
+    b = bgr_frame[:, :, 0].astype(np.float32)
+    g = bgr_frame[:, :, 1].astype(np.float32)
+    r = bgr_frame[:, :, 2].astype(np.float32)
+
+    if float(np.mean(np.abs(r - g))) < 3.5:
+        return bgr_frame
+
+    luma = 0.299 * r + 0.587 * g + 0.114 * b
+    non_sky = np.clip((225.0 - luma) / 45.0, 0.0, 1.0)
+
+    h = bgr_frame.shape[0]
+    trail_roi = bgr_frame[int(h * 0.25):, :, :]
+    p4 = np.percentile(trail_roi, 4, axis=(0, 1)).astype(np.float32)
+    glare = np.minimum(p4 * 0.68, 42.0)
+    b = np.maximum(0.0, b - glare[0] * non_sky)
+    g = np.maximum(0.0, g - glare[1] * non_sky)
+    r = np.maximum(0.0, r - glare[2] * non_sky)
+
+    purple_leak = np.maximum(0.0, np.minimum(r - g, b - g)) * non_sky
+    r_corr = r - 0.82 * purple_leak
+    b_corr = b - 0.92 * purple_leak
+    g_corr = g + 0.10 * purple_leak
+
+    midtone_mask = non_sky * np.clip((luma - 35.0) / 50.0, 0.0, 1.0)
+    g_corr = g_corr + 8.0 * midtone_mask
+    b_corr = np.maximum(0.0, b_corr - 6.0 * midtone_mask)
+
+    out = np.stack([b_corr, g_corr, r_corr], axis=-1)
+    norm = np.clip(out / 255.0, 0.0, 1.0)
+    curved = np.power(norm, 1.10) * 255.0
+    final = curved * non_sky[:, :, None] + out * (1.0 - non_sky[:, :, None])
+    return np.clip(final, 0, 255).astype(np.uint8)
+
+
 def main():
     picam2 = None
     sock = None
@@ -1381,9 +1424,19 @@ def main():
             active_signing_key = ephemeral_sk
 
         # Open persistent Picamera2 instance once for the entire warm hold-awake session
+        noir_tuning_paths = (
+            "/usr/share/libcamera/ipa/rpi/pisp/imx708_wide_noir.json",
+            "/usr/share/libcamera/ipa/rpi/vc4/imx708_wide_noir.json",
+            "/usr/share/libcamera/ipa/rpi/pisp/imx708_noir.json",
+        )
+        active_tuning_file = next((p for p in noir_tuning_paths if os.path.isfile(p)), None)
         try:
             from picamera2 import Picamera2
-            picam2 = Picamera2()
+            if active_tuning_file and hasattr(Picamera2, "load_tuning_file"):
+                tuning = Picamera2.load_tuning_file(active_tuning_file)
+                picam2 = Picamera2(tuning=tuning)
+            else:
+                picam2 = Picamera2()
             cfg_fn = getattr(picam2, "create_preview_configuration", None) or getattr(picam2, "create_still_configuration")
             config = cfg_fn(
                 main={"size": (1920, 1080), "format": "RGB888"},
@@ -1393,10 +1446,11 @@ def main():
             picam2.start()
             # Lock IMX708 VCM voice-coil lens to Hyperfocal position (0.5 diopters = 2.0m center,
             # keeping 1.0m to infinity razor-sharp with 0ms PDAF hunting on foreground twigs/snow)
+            # and set ExposureValue = -0.35 EV with centre-weighted metering to prevent sky blowout.
             if hasattr(picam2, "set_controls"):
                 try:
                     lens_pos = float(os.getenv("CAM_LENS_POSITION", "0.5"))
-                    picam2.set_controls({"AfMode": 0, "LensPosition": lens_pos})
+                    picam2.set_controls({"AfMode": 0, "LensPosition": lens_pos, "ExposureValue": -0.35})
                 except Exception:
                     pass
             time.sleep(0.25)
@@ -1441,6 +1495,7 @@ def main():
                         else:
                             lores_f = picam2.capture_array("lores")
                             main_f = picam2.capture_array("main")
+                        main_f = correct_noir_daylight_bgr(main_f)
                         captured_pairs.append((lores_f, main_f))
                         if f_i + 1 < n_frames:
                             time.sleep(0.04)
@@ -1454,18 +1509,23 @@ def main():
                         tmp_jpg = "/dev/shm/trailcam_capture.jpg"
                         lens_pos = str(float(os.getenv("CAM_LENS_POSITION", "0.5")))
                         pulse_ir_illuminator_strobe(30)
+                        cli_cmd = [
+                            cli_bin, "-n", "-t", "250",
+                            "--width", "1920", "--height", "1080",
+                            "--autofocus-mode", "manual", "--lens-position", lens_pos,
+                            "--metering", "centre", "--ev", "-0.35",
+                        ]
+                        if active_tuning_file:
+                            cli_cmd.extend(["--tuning-file", active_tuning_file])
+                        cli_cmd.extend(["-o", tmp_jpg])
                         res = subprocess.run(
-                            [
-                                cli_bin, "-n", "-t", "250",
-                                "--width", "1920", "--height", "1080",
-                                "--autofocus-mode", "manual", "--lens-position", lens_pos,
-                                "-o", tmp_jpg,
-                            ],
+                            cli_cmd,
                             capture_output=True, text=True, timeout=6
                         )
                         if res.returncode == 0 and os.path.exists(tmp_jpg):
                             bgr_frame = cv2.imread(tmp_jpg)
                             if bgr_frame is not None and bgr_frame.size > 0:
+                                bgr_frame = correct_noir_daylight_bgr(bgr_frame)
                                 lores_f = cv2.resize(bgr_frame, (640, 640))
                                 captured_pairs.append((lores_f, bgr_frame))
                                 break

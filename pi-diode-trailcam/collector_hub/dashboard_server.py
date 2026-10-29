@@ -88,6 +88,60 @@ except Exception:
     GLOBAL_DETECTOR = None
 
 
+def correct_noir_daylight_jpeg(jpeg_bytes: bytes) -> bytes:
+    """
+    Fast (~1.2 ms) sky-safe NoIR Daylight Color & Dehaze Correction on incoming JPEGs:
+    - Neutralizes the Near-Infrared (750-950 nm) Red/Blue leak of the Sony IMX708 NoIR
+      sensor in outdoor sunlight (restoring lavender clothes to dark grey/navy and
+      pinkish-grey bushes to natural green) and subtracts 30 mm glass window veiling glare.
+    - Leaves night-vision 940 nm monochrome IR frames and bright sky highlights untouched.
+    """
+    if not jpeg_bytes:
+        return jpeg_bytes
+    try:
+        import cv2
+        import numpy as np
+        arr_buf = np.frombuffer(jpeg_bytes, dtype=np.uint8)
+        bgr = cv2.imdecode(arr_buf, cv2.IMREAD_COLOR)
+        if bgr is None or bgr.ndim != 3:
+            return jpeg_bytes
+        b = bgr[:, :, 0].astype(np.float32)
+        g = bgr[:, :, 1].astype(np.float32)
+        r = bgr[:, :, 2].astype(np.float32)
+        # Skip if monochrome night IR frame
+        if float(np.mean(np.abs(r - g))) < 3.5:
+            return jpeg_bytes
+
+        luma = 0.299 * r + 0.587 * g + 0.114 * b
+        non_sky = np.clip((225.0 - luma) / 45.0, 0.0, 1.0)
+
+        h = bgr.shape[0]
+        trail_roi = bgr[int(h * 0.25):, :, :]
+        p4 = np.percentile(trail_roi, 4, axis=(0, 1)).astype(np.float32)
+        glare = np.minimum(p4 * 0.68, 42.0)
+        b = np.maximum(0.0, b - glare[0] * non_sky)
+        g = np.maximum(0.0, g - glare[1] * non_sky)
+        r = np.maximum(0.0, r - glare[2] * non_sky)
+
+        purple_leak = np.maximum(0.0, np.minimum(r - g, b - g)) * non_sky
+        r_corr = r - 0.82 * purple_leak
+        b_corr = b - 0.92 * purple_leak
+        g_corr = g + 0.10 * purple_leak
+
+        midtone_mask = non_sky * np.clip((luma - 35.0) / 50.0, 0.0, 1.0)
+        g_corr = g_corr + 8.0 * midtone_mask
+        b_corr = np.maximum(0.0, b_corr - 6.0 * midtone_mask)
+
+        out = np.stack([b_corr, g_corr, r_corr], axis=-1)
+        norm = np.clip(out / 255.0, 0.0, 1.0)
+        curved = np.power(norm, 1.10) * 255.0
+        final = np.clip(curved * non_sky[:, :, None] + out * (1.0 - non_sky[:, :, None]), 0, 255).astype(np.uint8)
+        ok, enc = cv2.imencode(".jpg", final, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+        return enc.tobytes() if ok else jpeg_bytes
+    except Exception:
+        return jpeg_bytes
+
+
 def _load_smart_captures(alerts_dir):
     cap_dir = os.path.join(alerts_dir, "smart_captures")
     os.makedirs(cap_dir, exist_ok=True)
@@ -1421,6 +1475,10 @@ def make_command_center_handler(alerts_dir, verbose=False, demo_mode=False):
                             if os.path.isfile(jpg_path):
                                 with open(jpg_path, "rb") as jf:
                                     jpeg_bytes = jf.read()
+                                with CAMERA_CONTROL_LOCK:
+                                    pmode = CAMERA_CONTROL_STATE.get("picture_mode", "natural")
+                                if pmode in ("natural", "vivid", "low_glare"):
+                                    jpeg_bytes = correct_noir_daylight_jpeg(jpeg_bytes)
                             if (
                                 jpeg_bytes
                                 and GLOBAL_DETECTOR is not None
