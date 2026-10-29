@@ -13,12 +13,20 @@ Usage:
 """
 
 import argparse
+import glob
 import json
 import math
 import os
 import sys
 import time
-from nacl.signing import SigningKey
+
+try:
+    from nacl.signing import SigningKey
+except ModuleNotFoundError:
+    _FALLBACK_PY = "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
+    if os.path.exists(_FALLBACK_PY) and os.path.realpath(sys.executable) != os.path.realpath(_FALLBACK_PY):
+        os.execv(_FALLBACK_PY, [_FALLBACK_PY, "-B"] + sys.argv)
+    raise
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TX_DIR = os.path.join(SCRIPT_DIR, "transmitter")
@@ -39,6 +47,74 @@ from sky_receiver import (  # noqa: E402
     simulate_vk7mo_scatter_channel,
     verify_signed_sky_alert,
 )
+
+
+def probe_live_pluto_rx_ota(num_samples: int = 5) -> dict:
+    """
+    Connects to a live ADALM-PLUTO SDR over USB serial (/dev/cu.usbmodem* or /dev/ttyACM*),
+    tunes RX LO to 2.425 GHz in slow_attack AGC mode, and captures `num_samples` live
+    over-the-air RSSI (dBm) and AGC hardwaregain (dB) readings.
+    """
+    candidates = sorted(glob.glob("/dev/cu.usbmodem*") + glob.glob("/dev/ttyACM*"))
+    for port in candidates:
+        fd = None
+        try:
+            fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+
+            def _cmd(s: str, wait_s: float = 0.3) -> str:
+                os.write(fd, (s + "\r\n").encode())
+                time.sleep(wait_s)
+                out = b""
+                while True:
+                    try:
+                        chunk = os.read(fd, 8192)
+                        if not chunk:
+                            break
+                        out += chunk
+                    except BlockingIOError:
+                        break
+                return out.decode(errors="ignore")
+
+            _cmd("root", 0.2)
+            _cmd("analog", 0.2)
+            probe = _cmd("cat /sys/bus/iio/devices/iio:device0/name 2>/dev/null", 0.3)
+            if "ad9361-phy" not in probe:
+                os.close(fd)
+                continue
+
+            _cmd("echo 2425000000 > /sys/bus/iio/devices/iio:device0/out_altvoltage0_RX_LO_frequency", 0.25)
+            _cmd("echo slow_attack > /sys/bus/iio/devices/iio:device0/in_voltage0_gain_control_mode", 0.25)
+            samples = []
+            print(f"[*] Connected to live ADALM-PLUTO RX on {port} (2.425 GHz Over-the-Air):")
+            for idx in range(num_samples):
+                out_rssi = _cmd("cat /sys/bus/iio/devices/iio:device0/in_voltage0_rssi", 0.3)
+                out_gain = _cmd("cat /sys/bus/iio/devices/iio:device0/in_voltage0_hardwaregain", 0.3)
+                rssi_lines = [l.strip() for l in out_rssi.splitlines() if "dB" in l]
+                gain_lines = [l.strip() for l in out_gain.splitlines() if "dB" in l]
+                if rssi_lines and gain_lines:
+                    rssi_dbm = -abs(float(rssi_lines[-1].split()[0]))
+                    agc_db = float(gain_lines[-1].split()[0])
+                    samples.append({"sample": idx + 1, "rx_rssi_dbm": rssi_dbm, "rx_agc_gain_db": agc_db})
+                    print(f"    Sample {idx + 1}/{num_samples}: Live RX Power = {rssi_dbm:6.2f} dBm | AGC Gain = {agc_db:5.1f} dB")
+            os.close(fd)
+            if samples:
+                avg_rssi = round(sum(s["rx_rssi_dbm"] for s in samples) / len(samples), 2)
+                avg_agc = round(sum(s["rx_agc_gain_db"] for s in samples) / len(samples), 2)
+                return {
+                    "live_hardware_detected": True,
+                    "serial_port": port,
+                    "center_freq_ghz": 2.425,
+                    "avg_rx_rssi_dbm": avg_rssi,
+                    "avg_rx_agc_gain_db": avg_agc,
+                    "samples": samples,
+                }
+        except Exception:
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except Exception:
+                    pass
+    return {"live_hardware_detected": False}
 
 
 def run_gate3_range_checkpoint(
@@ -128,7 +204,7 @@ def run_gate3_range_checkpoint(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Sky-Diode-Relay Gate 3 Outdoor Range Acceptance Harness")
-    parser.add_argument("--self-test", action="store_true", help="Run multi-range (100m, 500m, 1000m) verification")
+    parser.add_argument("--self-test", action="store_true", help="Run multi-range (100m, 500m, 1000m) software link-budget self-test")
     parser.add_argument("--distance-m", type=float, default=500.0, help="Outdoor test range in meters")
     parser.add_argument("--civilian-eu-compliant", action="store_true", default=True, help="Enforce <=100 mW EIRP")
     parser.add_argument(
@@ -139,20 +215,57 @@ def main() -> int:
     args = parser.parse_args()
 
     checkpoints = [100.0, 500.0, 1000.0] if args.self_test else [args.distance_m]
+    live_ota = {"live_hardware_detected": False} if args.self_test else probe_live_pluto_rx_ota(num_samples=5)
     results = []
+    overall_passed = True
+
     for d_m in checkpoints:
         res = run_gate3_range_checkpoint(
             distance_m=d_m,
             foliage_depth_m=20.0 if d_m <= 150.0 else 55.0,
             civilian_eu_mode=args.civilian_eu_compliant,
         )
+        if not args.self_test:
+            # STRICT HARDWARE TRUTH GATE:
+            # In live mode (not --self-test), NEVER allow theoretical link-budget simulation
+            # to determine the verdict. Require live ADALM-PLUTO RX hardware AND real measured
+            # RF carrier power well above the -100..-115 dBm thermal noise floor.
+            min_required_rssi_dbm = -65.0 if d_m <= 15.0 else -85.0
+            res["min_required_live_rx_rssi_dbm"] = min_required_rssi_dbm
+            if not live_ota.get("live_hardware_detected"):
+                res["live_measured_rx_rssi_dbm"] = None
+                res["verdict"] = "FAIL"
+                res["failure_reason"] = (
+                    f"No live RX ADALM-PLUTO detected on USB serial ({live_ota.get('error', 'no device')})."
+                )
+                overall_passed = False
+            else:
+                meas_rssi = float(live_ota["avg_rx_rssi_dbm"])
+                res["live_measured_rx_rssi_dbm"] = meas_rssi
+                res["live_measured_rx_agc_gain_db"] = live_ota["avg_rx_agc_gain_db"]
+                res["live_serial_port"] = live_ota["serial_port"]
+                if meas_rssi < min_required_rssi_dbm:
+                    res["verdict"] = "FAIL"
+                    res["failure_reason"] = (
+                        f"Live measured RX RSSI ({meas_rssi:.2f} dBm) is below required carrier threshold "
+                        f"({min_required_rssi_dbm:.2f} dBm at {d_m:.0f} m) — receiver is seeing noise floor / no TX carrier."
+                    )
+                    overall_passed = False
+                else:
+                    res["verdict"] = "PASS"
+        else:
+            if res["verdict"] != "PASS":
+                overall_passed = False
+
         results.append(res)
-        assert res["verdict"] == "PASS", f"Gate 3 checkpoint failed at {d_m} m: {res}"
 
     tropo_20km = calculate_troposcatter_link_budget(distance_km=20.0, weather_regime="DRY_ARCTIC_WINTER")
+    overall_verdict = "PASS" if overall_passed else "FAIL"
     report = {
         "schema": "SKY_DIODE_RELAY_GATE3_OUTDOOR_ACCEPTANCE_V1",
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "mode": "SIMULATED_SELF_TEST" if args.self_test else "LIVE_HARDWARE_OTA",
+        "live_ota_telemetry": live_ota,
         "hardware_stack": {
             "sdr": "2x Analog Devices ADALM-PLUTO (325-3800 MHz)",
             "pa": "Skyworks SE2576L-EK1 (+50.50 dB bench power jump verified at 2.425 GHz)",
@@ -162,14 +275,17 @@ def main() -> int:
         },
         "gate3_checkpoints": results,
         "nlos_20km_arctic_link_margin_db": round(float(tropo_20km["fade_margin_99pct_db"]), 2),
-        "overall_verdict": "PASS",
+        "overall_verdict": overall_verdict,
     }
 
     with open(args.out_file, "w", encoding="utf-8") as fh:
         json.dump(report, fh, indent=2)
-    print(f"[+] Gate 3 Outdoor Range Verification PASSED -> {args.out_file}")
+    if overall_passed:
+        print(f"[+] Gate 3 Outdoor Range Verification PASSED -> {args.out_file}")
+    else:
+        print(f"[-] Gate 3 Outdoor Range Verification FAILED -> {args.out_file}")
     print(json.dumps(report, indent=2))
-    return 0
+    return 0 if overall_passed else 1
 
 
 if __name__ == "__main__":

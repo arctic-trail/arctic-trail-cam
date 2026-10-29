@@ -1220,11 +1220,158 @@ def estimate_subject_kinematics(
     }
 
 
+def parse_preroll_fast_snap_telemetry(pico_telemetry):
+    """
+    Extracts sub-2-second (<2000ms from initial sensory input) instant pre-roll
+    snapshot telemetry (`FAST_SNAP`, `FAST_SNAP_MS`, `FAST_SNAP_HEX`) captured by
+    the Pico 2 Gatekeeper at t=0.0s before the Pi 5 cold-boots.
+    """
+    fields = parse_pico_trig_fields(pico_telemetry)
+    snap_bytes = int(round(fields.get("FAST_SNAP", 0.0)))
+    snap_ms = int(round(fields.get("FAST_SNAP_MS", 140.0))) if snap_bytes > 0 else None
+    snap_hex = ""
+    if isinstance(pico_telemetry, str) and "FAST_SNAP_HEX=" in pico_telemetry:
+        for token in pico_telemetry.strip().split(","):
+            if token.startswith("FAST_SNAP_HEX="):
+                snap_hex = token.split("=", 1)[1].strip()
+                break
+    return {
+        "preroll_captured": bool(snap_bytes > 0),
+        "preroll_bytes": max(0, snap_bytes),
+        "preroll_snap_ms": snap_ms,
+        "under_2s_sensory_sla": bool(snap_ms is not None and snap_ms < 2000),
+        "preroll_header_hex": snap_hex[:64] if snap_hex else "",
+    }
+
+
+def should_transmit_after_triage(
+    detections_found,
+    pico_telemetry="",
+    lwir_hotspots=0,
+    suppress_empty_frames=None,
+):
+    """
+    Edge AI Triage Gate (Gap 4 Closure):
+    Decides after local object detection / thermal / pre-roll triage whether to transmit
+    an alert over the optical diode or suppress false-alarm frames (e.g., wind-blown twigs):
+      - Always transmits when >=1 object detection (`person`, `vehicle`, `animal`, `motion_target`)
+        or LWIR thermal hotspot is present, OR when a sub-2-second `FAST_SNAP` pre-roll frame
+        or high-speed radar track (`|SPD| >= 50 cm/s`) was captured on the Pico 2.
+      - When `suppress_empty_frames=True` (or `TRIAGE_SUPPRESS_EMPTY_FRAMES=1` in 1-year forest mode),
+        suppresses transmitting empty fallback frames when 0 targets are detected.
+    """
+    if suppress_empty_frames is None:
+        suppress_empty_frames = os.getenv("TRIAGE_SUPPRESS_EMPTY_FRAMES", "0") == "1"
+
+    has_detections = bool(detections_found and len(detections_found) > 0)
+    has_lwir = int(lwir_hotspots or 0) > 0
+    preroll_info = parse_preroll_fast_snap_telemetry(pico_telemetry)
+    fields = parse_pico_trig_fields(pico_telemetry)
+    high_speed_radar = abs(float(fields.get("SPD", 0.0))) >= 50.0
+
+    if has_detections or has_lwir or preroll_info["preroll_captured"] or high_speed_radar:
+        return True
+    if suppress_empty_frames:
+        return False
+    return True
+
+
+def spool_verified_alert_locally(alert_meta, jpeg_bytes, spool_dir=None, max_spool_files=None):
+    """
+    Local Black-Box Non-Volatile Spool (Receiver-Off Resilience):
+    Atomically spools a copy of every verified alert JPEG + metadata JSON to a local
+    ring-buffered directory on the Raspberry Pi 5 SD/NVMe before Domain B power-cut.
+    Ensures 0% evidence loss even if the remote Collector Hub is powered off during an event.
+    """
+    if spool_dir is None:
+        spool_dir = os.getenv("LOCAL_SPOOL_DIR", "/var/tmp/trailcam_blackbox_spool")
+    if max_spool_files is None:
+        max_spool_files = int(os.getenv("MAX_LOCAL_SPOOL_ALERTS", "250"))
+    if max_spool_files <= 0 or not jpeg_bytes:
+        return None
+    try:
+        os.makedirs(spool_dir, exist_ok=True)
+        node_str = str(alert_meta.get("node", NODE_ID))
+        ts_val = int(alert_meta.get("ts") or time.time())
+        nonce_short = str(alert_meta.get("nonce") or secrets.token_hex(4))[:8]
+        base_name = f"{node_str}_{ts_val}_{nonce_short}"
+        jpg_path = os.path.join(spool_dir, f"{base_name}.jpg")
+        meta_path = os.path.join(spool_dir, f"{base_name}.json")
+        tmp_jpg = f"{jpg_path}.tmp"
+        tmp_meta = f"{meta_path}.tmp"
+        with open(tmp_jpg, "wb") as jf:
+            jf.write(jpeg_bytes)
+        os.replace(tmp_jpg, jpg_path)
+        with open(tmp_meta, "wb") as mf:
+            mf.write(json.dumps(alert_meta, separators=(",", ":")).encode("utf-8"))
+        os.replace(tmp_meta, meta_path)
+
+        # Enforce circular ring-buffer cap on local spool
+        jpg_files = sorted(
+            [os.path.join(spool_dir, fn) for fn in os.listdir(spool_dir) if fn.endswith(".jpg")],
+            key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0,
+        )
+        while len(jpg_files) > max_spool_files:
+            oldest_jpg = jpg_files.pop(0)
+            oldest_json = oldest_jpg[:-4] + ".json"
+            for p in (oldest_jpg, oldest_json):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+        return jpg_path
+    except Exception:
+        return None
+
+
+def should_continue_warm_hold_loop(
+    burst_idx,
+    session_elapsed_s,
+    since_last_detection_s,
+    detections_in_current_frame,
+    min_burst_frames=None,
+    hold_after_detection_s=None,
+    max_session_s=None,
+):
+    """
+    Determines whether the Raspberry Pi 5 should remain in its warm hold-awake
+    streaming loop (~0.5-0.8s per frame with Picamera2 + ONNX/Hailo + 1000BASE-X link
+    kept open in RAM) rather than immediately cutting Domain B power after Frame #1:
+      - Always transmits at least `min_burst_frames` (default 3) warm burst frames on
+        every sensor wake so a target entering the edge of the FOV after the initial
+        shutter is still captured without a 5.5s cold reboot.
+      - Continues streaming as long as `detections_in_current_frame > 0` OR within
+        `hold_after_detection_s` (default 12.0s) after the most recent detection.
+      - Strictly caps total awake session duration at `max_session_s` (default 24.0s)
+        so the Pi 5 always asserts GPIO 25 DONE well before the Pico 2 Gatekeeper's
+        35.0s (`MAX_TIMEOUT_MS`) hardware watchdog cutoff.
+    """
+    if min_burst_frames is None:
+        min_burst_frames = int(os.getenv("WARM_MIN_BURST_FRAMES", "3"))
+    if hold_after_detection_s is None:
+        hold_after_detection_s = float(os.getenv("WARM_HOLD_AWAKE_SEC", "12.0"))
+    if max_session_s is None:
+        max_session_s = float(os.getenv("WARM_MAX_SESSION_SEC", "24.0"))
+
+    if float(session_elapsed_s) >= float(max_session_s):
+        return False
+    if int(burst_idx) + 1 < int(min_burst_frames):
+        return True
+    if int(detections_in_current_frame) > 0:
+        return True
+    if since_last_detection_s is not None and float(since_last_detection_s) <= float(hold_after_detection_s):
+        return True
+    return False
+
+
 # ==============================================================================
 # Main Pipeline with Strict Fault Recovery
 # ==============================================================================
 def main():
+    picam2 = None
+    sock = None
     try:
+        session_start_ts = time.time()
         # Refresh node identity and key in case NODE_KEY_FILE / NODE_ID were configured at runtime
         active_signing_key = load_signing_key()
         iface = setup_unidirectional_network()
@@ -1233,10 +1380,7 @@ def main():
         if ephemeral_sk is not None:
             active_signing_key = ephemeral_sk
 
-        # Initialize Camera with Picamera2 using synchronized single-request capture
-        picam2 = None
-        captured_pairs = []
-
+        # Open persistent Picamera2 instance once for the entire warm hold-awake session
         try:
             from picamera2 import Picamera2
             picam2 = Picamera2()
@@ -1256,260 +1400,346 @@ def main():
                 except Exception:
                     pass
             time.sleep(0.25)
-            # Pulse 940nm IR strobe only during active exposure window (NVG stealth discipline)
-            pulse_ir_illuminator_strobe(30)
-            for _ in range(3):
-                if hasattr(picam2, "capture_request"):
-                    req = picam2.capture_request()
-                    try:
-                        lores_f = req.make_array("lores")
-                        main_f = req.make_array("main")
-                    finally:
-                        req.release()
-                else:
-                    lores_f = picam2.capture_array("lores")
-                    main_f = picam2.capture_array("main")
-                captured_pairs.append((lores_f, main_f))
-                time.sleep(0.05)
         except Exception as e:
             print(f"[!] Picamera2 initialization error: {e}", file=sys.stderr)
-        finally:
-            if picam2:
+            if picam2 is not None:
                 try:
                     picam2.stop()
                 except Exception:
                     pass
+                picam2 = None
 
-        # Fallback to pre-installed rpicam-still / libcamera-still CLI on Raspberry Pi OS Lite
-        if not captured_pairs:
-            for cli_bin in ("/usr/bin/rpicam-still", "rpicam-still", "/usr/bin/libcamera-still", "libcamera-still"):
-                try:
-                    tmp_jpg = "/dev/shm/trailcam_capture.jpg"
-                    lens_pos = str(float(os.getenv("CAM_LENS_POSITION", "0.5")))
-                    pulse_ir_illuminator_strobe(30)
-                    res = subprocess.run(
-                        [
-                            cli_bin, "-n", "-t", "250",
-                            "--width", "1920", "--height", "1080",
-                            "--autofocus-mode", "manual", "--lens-position", lens_pos,
-                            "-o", tmp_jpg,
-                        ],
-                        capture_output=True, text=True, timeout=6
-                    )
-                    if res.returncode == 0 and os.path.exists(tmp_jpg):
-                        bgr_frame = cv2.imread(tmp_jpg)
-                        if bgr_frame is not None and bgr_frame.size > 0:
-                            lores_f = cv2.resize(bgr_frame, (640, 640))
-                            captured_pairs.append((lores_f, bgr_frame))
-                            break
-                except Exception:
-                    continue
-
-        camera_ok = bool(captured_pairs)
-        main_frame = captured_pairs[-1][1] if captured_pairs else None
-
-        # If camera failed, generate a clean zero-initialized test frame for operator feedback
-        if main_frame is None:
-            canvas = np.zeros((1080, 1920, 3), dtype=np.uint8)
-            main_frame = cv2.putText(
-                canvas,
-                "CAMERA SENSOR ERROR", (200, 540),
-                cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 255, 255), 3
-            )
-
-        detections_found = []
-        best_crop_jpeg = b""
-        best_crop_bounds = None
-        best_crop_frame_shape = main_frame.shape
-        inference_backend = "camera_error" if not camera_ok else "full_frame"
-
-        # Attempt Hailo NPU Inference across captured frames with Graceful CPU Fallback
-        hailo_available = False
-        if os.path.exists(HEF_PATH) and captured_pairs:
+        # Pre-load CPU ONNX network once so warm follow-up frames don't re-read disk weights
+        cached_onnx_net = None
+        if os.path.exists(ONNX_PATH):
             try:
-                from picamera2.devices import Hailo
-                with Hailo(HEF_PATH) as hailo:
-                    for lores_frame, m_frame in captured_pairs:
-                        results = hailo.run(lores_frame)
-                        hailo_available = True
-                        inference_backend = "hailo"
-                        best_score = -1.0
-                        for class_id, bboxes in enumerate(results):
-                            if class_id in TARGET_CLASSES and len(bboxes) > 0:
-                                for box in bboxes:
-                                    score = float(box[4])
-                                    if score >= CONF_THRESHOLD:
-                                        ymin, xmin, ymax, xmax = [float(v) for v in box[:4]]
-                                        detections_found.append({
-                                            "class": TARGET_CLASSES[class_id],
-                                            "conf": round(score, 2),
-                                            "box": [round(xmin, 3), round(ymin, 3), round(xmax, 3), round(ymax, 3)]
-                                        })
-                                        if score > best_score:
-                                            best_score = score
-                                            best_crop_jpeg, best_crop_bounds = _encode_target_crop(
-                                                m_frame, xmin, ymin, xmax, ymax, return_bounds=True
-                                            )
-                                            best_crop_frame_shape = m_frame.shape
-                        if detections_found:
-                            break
+                cached_onnx_net = cv2.dnn.readNetFromONNX(ONNX_PATH)
             except Exception as e:
-                hailo_available = False
-                detections_found = []
-                best_crop_jpeg = b""
-                best_crop_bounds = None
-                print(f"[!] Hailo NPU runtime failure (falling back to CPU): {e}", file=sys.stderr)
+                print(f"[!] ONNX model preload warning: {e}", file=sys.stderr)
 
-        # Fallback 1: CPU YOLOv8n ONNX inference via OpenCV DNN with Aspect-Ratio Letterboxing & No-Vanish Pose Probe
-        if not hailo_available and os.path.exists(ONNX_PATH) and captured_pairs:
-            try:
-                net = cv2.dnn.readNetFromONNX(ONNX_PATH)
-                lores_frame, m_frame = captured_pairs[-1]
-                # Use aspect-ratio letterboxed m_frame when m_frame is non-square, avoiding 1.77x aspect distortion
-                infer_src = m_frame if (m_frame is not None and m_frame.shape[0] != m_frame.shape[1]) else lores_frame
-                padded_img, scale_r, pad_dw, pad_dh = letterbox_image(infer_src, 640)
-                src_h, src_w = infer_src.shape[:2]
-                # Picamera2 RGB888 is BGR in memory; swapRB=True produces RGB input expected by YOLOv8 ONNX
-                swap_rb = os.getenv("CAMERA_COLOR_SWAP_RB", "1") == "1"
-                blob = cv2.dnn.blobFromImage(padded_img, 1.0 / 255.0, (640, 640), swapRB=swap_rb, crop=False)
-                net.setInput(blob)
-                preds = net.forward()
-                inference_backend = "onnx_cpu"
-                # YOLOv8 output shape: (1, 84, 8400) -> transpose to (8400, 84)
-                if preds.ndim == 3 and preds.shape[1] < preds.shape[2]:
-                    preds = np.transpose(preds[0], (1, 0))
-                elif preds.ndim == 3:
-                    preds = preds[0]
-
-                boxes_xywh = []
-                scores_list = []
-                class_ids = []
-                norm_boxes = []
-                for row in preds:
-                    scores = row[4:]
-                    class_id = int(np.argmax(scores))
-                    score = float(scores[class_id])
-                    if class_id in TARGET_CLASSES and score >= CONF_THRESHOLD:
-                        cx, cy, bw, bh = [float(v) for v in row[:4]]
-                        x1_px = (cx - bw / 2.0 - pad_dw) / scale_r
-                        y1_px = (cy - bh / 2.0 - pad_dh) / scale_r
-                        x2_px = (cx + bw / 2.0 - pad_dw) / scale_r
-                        y2_px = (cy + bh / 2.0 - pad_dh) / scale_r
-                        xmin = max(0.0, min(1.0, x1_px / float(src_w)))
-                        ymin = max(0.0, min(1.0, y1_px / float(src_h)))
-                        xmax = max(0.0, min(1.0, x2_px / float(src_w)))
-                        ymax = max(0.0, min(1.0, y2_px / float(src_h)))
-                        boxes_xywh.append([int(xmin * 640), int(ymin * 640), int((xmax - xmin) * 640), int((ymax - ymin) * 640)])
-                        scores_list.append(score)
-                        class_ids.append(class_id)
-                        norm_boxes.append((xmin, ymin, xmax, ymax))
-
-                if boxes_xywh:
-                    indices = cv2.dnn.NMSBoxes(boxes_xywh, scores_list, CONF_THRESHOLD, 0.45)
-                    flat_indices = [int(i[0]) if isinstance(i, (list, tuple, np.ndarray)) else int(i) for i in indices]
-                    best_score = -1.0
-                    for idx in flat_indices:
-                        xmin, ymin, xmax, ymax = norm_boxes[idx]
-                        score = scores_list[idx]
-                        cid = class_ids[idx]
-                        detections_found.append({
-                            "class": TARGET_CLASSES[cid],
-                            "conf": round(score, 2),
-                            "box": [round(xmin, 3), round(ymin, 3), round(xmax, 3), round(ymax, 3)]
-                        })
-                        if score > best_score:
-                            best_score = score
-                            best_crop_jpeg, best_crop_bounds = _encode_target_crop(
-                                m_frame, xmin, ymin, xmax, ymax, return_bounds=True
-                            )
-                            best_crop_frame_shape = m_frame.shape
-            except Exception as e:
-                print(f"[!] CPU ONNX fallback warning: {e}", file=sys.stderr)
-
-        # Fallback 2: Multi-frame inter-frame motion ROI crop if NPU/ONNX unavailable
-        if not hailo_available and not best_crop_jpeg and len(captured_pairs) >= 2:
-            try:
-                g1 = cv2.cvtColor(captured_pairs[0][0], cv2.COLOR_BGR2GRAY)
-                g2 = cv2.cvtColor(captured_pairs[-1][0], cv2.COLOR_BGR2GRAY)
-                diff = cv2.absdiff(cv2.GaussianBlur(g1, (5, 5), 0), cv2.GaussianBlur(g2, (5, 5), 0))
-                _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
-                cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                if cnts:
-                    largest = max(cnts, key=cv2.contourArea)
-                    if cv2.contourArea(largest) > 400:
-                        rx, ry, rw, rh = cv2.boundingRect(largest)
-                        xmin, ymin = rx / 640.0, ry / 640.0
-                        xmax, ymax = (rx + rw) / 640.0, (ry + rh) / 640.0
-                        detections_found.append({
-                            "class": "motion_target",
-                            "conf": 0.75,
-                            "box": [round(xmin, 3), round(ymin, 3), round(xmax, 3), round(ymax, 3)]
-                        })
-                        inference_backend = "motion_roi"
-                        best_crop_jpeg, best_crop_bounds = _encode_target_crop(
-                            captured_pairs[-1][1], xmin, ymin, xmax, ymax, return_bounds=True
-                        )
-                        best_crop_frame_shape = captured_pairs[-1][1].shape
-            except Exception:
-                pass
-
-        # Remap detection bounding boxes into the cropped image's coordinate frame
-        if best_crop_jpeg and best_crop_bounds is not None:
-            detections_found = remap_detections_to_crop(
-                detections_found, best_crop_bounds, best_crop_frame_shape
-            )
-
-        # Fallback 3: if no target detected or NPU unavailable, encode a scaled full-frame snapshot
-        if not best_crop_jpeg:
-            fallback_bgr = cv2.resize(main_frame, (960, 540))
-            if os.getenv("CAMERA_COLOR_SWAP_RB", "0") == "1":
-                fallback_bgr = cv2.cvtColor(fallback_bgr, cv2.COLOR_RGB2BGR)
-            if not camera_ok:
-                cv2.putText(fallback_bgr, "CAMERA SENSOR ERROR", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-            _, enc = cv2.imencode(".jpg", fallback_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 65])
-            best_crop_jpeg = enc.tobytes()
-
-        # Ensure 1000BASE-T / optical carrier has completed auto-negotiation before firing UDP burst
-        if os.getenv("DIODE_AUTO_RENEGOTIATE", "0") == "1":
-            renegotiate_optical_diode_link(iface=iface)
-        else:
-            wait_for_ethernet_carrier(iface=iface, timeout_s=3.0)
-
-        # Evaluate hydrocarbon/wildfire smoke obscuration & fuse optional USB TOPDON TC001 8-14 um LWIR hotspots
-        lwir_smoke_meta = detect_smoke_obscuration_and_fuse_tc001_lwir(
-            main_frame, existing_detections=detections_found
-        )
-        detections_found = lwir_smoke_meta["fused_detections"]
-
-        # Construct and fire alert payload over optical diode
-        subject_kinematics = estimate_subject_kinematics(
-            detections_found, pico_telemetry, captured_pairs=captured_pairs
-        )
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        alert_payload = {
-            "node": NODE_ID,
-            "ts": int(time.time()),
-            "pico_trig": pico_telemetry,
-            "detections": detections_found,
-            "subject_kinematics": subject_kinematics,
-            "lwir_smoke_fusion": {
-                "smoke_or_fog_obscured": lwir_smoke_meta["smoke_or_fog_obscured"],
-                "eo_rms_contrast": lwir_smoke_meta["eo_rms_contrast"],
-                "vis_055um_transmission_pct": lwir_smoke_meta["vis_055um_transmission_pct"],
-                "lwir_10um_transmission_pct": lwir_smoke_meta["lwir_10um_transmission_pct"],
-                "tc001_lwir_sensor_active": lwir_smoke_meta["tc001_lwir_sensor_active"],
-                "lwir_hotspots_detected": lwir_smoke_meta["lwir_hotspots_detected"],
-            },
-            "hailo_active": hailo_available,
-            "camera_ok": camera_ok,
-            "inference_backend": inference_backend,
-        }
-        transmit_over_diode(sock, alert_payload, best_crop_jpeg, custom_signing_key=active_signing_key)
-        sock.close()
+        burst_idx = 0
+        last_detection_ts = None
+
+        while True:
+            pipeline_t0 = time.time()
+            captured_pairs = []
+
+            if picam2 is not None:
+                try:
+                    pulse_ir_illuminator_strobe(30)
+                    # Capture 3 frames on cold burst #0, or 2 fast frames (40ms apart) on warm follow-up bursts
+                    n_frames = 3 if burst_idx == 0 else 2
+                    for f_i in range(n_frames):
+                        if hasattr(picam2, "capture_request"):
+                            req = picam2.capture_request()
+                            try:
+                                lores_f = req.make_array("lores")
+                                main_f = req.make_array("main")
+                            finally:
+                                req.release()
+                        else:
+                            lores_f = picam2.capture_array("lores")
+                            main_f = picam2.capture_array("main")
+                        captured_pairs.append((lores_f, main_f))
+                        if f_i + 1 < n_frames:
+                            time.sleep(0.04)
+                except Exception as e:
+                    print(f"[!] Picamera2 frame capture error: {e}", file=sys.stderr)
+
+            # Fallback to pre-installed rpicam-still / libcamera-still CLI on Raspberry Pi OS Lite
+            if not captured_pairs:
+                for cli_bin in ("/usr/bin/rpicam-still", "rpicam-still", "/usr/bin/libcamera-still", "libcamera-still"):
+                    try:
+                        tmp_jpg = "/dev/shm/trailcam_capture.jpg"
+                        lens_pos = str(float(os.getenv("CAM_LENS_POSITION", "0.5")))
+                        pulse_ir_illuminator_strobe(30)
+                        res = subprocess.run(
+                            [
+                                cli_bin, "-n", "-t", "250",
+                                "--width", "1920", "--height", "1080",
+                                "--autofocus-mode", "manual", "--lens-position", lens_pos,
+                                "-o", tmp_jpg,
+                            ],
+                            capture_output=True, text=True, timeout=6
+                        )
+                        if res.returncode == 0 and os.path.exists(tmp_jpg):
+                            bgr_frame = cv2.imread(tmp_jpg)
+                            if bgr_frame is not None and bgr_frame.size > 0:
+                                lores_f = cv2.resize(bgr_frame, (640, 640))
+                                captured_pairs.append((lores_f, bgr_frame))
+                                break
+                    except Exception:
+                        continue
+
+            camera_ok = bool(captured_pairs)
+            main_frame = captured_pairs[-1][1] if captured_pairs else None
+
+            # If camera failed, generate a clean zero-initialized test frame for operator feedback
+            if main_frame is None:
+                canvas = np.zeros((1080, 1920, 3), dtype=np.uint8)
+                main_frame = cv2.putText(
+                    canvas,
+                    "CAMERA SENSOR ERROR", (200, 540),
+                    cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 255, 255), 3
+                )
+
+            detections_found = []
+            best_crop_jpeg = b""
+            best_crop_bounds = None
+            best_crop_frame_shape = main_frame.shape
+            inference_backend = "camera_error" if not camera_ok else "full_frame"
+
+            # Attempt Hailo NPU Inference across captured frames with Graceful CPU Fallback
+            hailo_available = False
+            if os.path.exists(HEF_PATH) and captured_pairs:
+                try:
+                    from picamera2.devices import Hailo
+                    with Hailo(HEF_PATH) as hailo:
+                        for lores_frame, m_frame in captured_pairs:
+                            results = hailo.run(lores_frame)
+                            hailo_available = True
+                            inference_backend = "hailo"
+                            best_score = -1.0
+                            for class_id, bboxes in enumerate(results):
+                                if class_id in TARGET_CLASSES and len(bboxes) > 0:
+                                    for box in bboxes:
+                                        score = float(box[4])
+                                        if score >= CONF_THRESHOLD:
+                                            ymin, xmin, ymax, xmax = [float(v) for v in box[:4]]
+                                            detections_found.append({
+                                                "class": TARGET_CLASSES[class_id],
+                                                "conf": round(score, 2),
+                                                "box": [round(xmin, 3), round(ymin, 3), round(xmax, 3), round(ymax, 3)]
+                                            })
+                                            if score > best_score:
+                                                best_score = score
+                                                best_crop_jpeg, best_crop_bounds = _encode_target_crop(
+                                                    m_frame, xmin, ymin, xmax, ymax, return_bounds=True
+                                                )
+                                                best_crop_frame_shape = m_frame.shape
+                            if detections_found:
+                                break
+                except Exception as e:
+                    hailo_available = False
+                    detections_found = []
+                    best_crop_jpeg = b""
+                    best_crop_bounds = None
+                    print(f"[!] Hailo NPU runtime failure (falling back to CPU): {e}", file=sys.stderr)
+
+            # Fallback 1: CPU YOLOv8n ONNX inference via OpenCV DNN with Aspect-Ratio Letterboxing & No-Vanish Pose Probe
+            if not hailo_available and (cached_onnx_net is not None or os.path.exists(ONNX_PATH)) and captured_pairs:
+                try:
+                    net = cached_onnx_net if cached_onnx_net is not None else cv2.dnn.readNetFromONNX(ONNX_PATH)
+                    lores_frame, m_frame = captured_pairs[-1]
+                    # Use aspect-ratio letterboxed m_frame when m_frame is non-square, avoiding 1.77x aspect distortion
+                    infer_src = m_frame if (m_frame is not None and m_frame.shape[0] != m_frame.shape[1]) else lores_frame
+                    padded_img, scale_r, pad_dw, pad_dh = letterbox_image(infer_src, 640)
+                    src_h, src_w = infer_src.shape[:2]
+                    # Picamera2 RGB888 is BGR in memory; swapRB=True produces RGB input expected by YOLOv8 ONNX
+                    swap_rb = os.getenv("CAMERA_COLOR_SWAP_RB", "1") == "1"
+                    blob = cv2.dnn.blobFromImage(padded_img, 1.0 / 255.0, (640, 640), swapRB=swap_rb, crop=False)
+                    net.setInput(blob)
+                    preds = net.forward()
+                    inference_backend = "onnx_cpu"
+                    # YOLOv8 output shape: (1, 84, 8400) -> transpose to (8400, 84)
+                    if preds.ndim == 3 and preds.shape[1] < preds.shape[2]:
+                        preds = np.transpose(preds[0], (1, 0))
+                    elif preds.ndim == 3:
+                        preds = preds[0]
+
+                    boxes_xywh = []
+                    scores_list = []
+                    class_ids = []
+                    norm_boxes = []
+                    for row in preds:
+                        scores = row[4:]
+                        class_id = int(np.argmax(scores))
+                        score = float(scores[class_id])
+                        if class_id in TARGET_CLASSES and score >= CONF_THRESHOLD:
+                            cx, cy, bw, bh = [float(v) for v in row[:4]]
+                            x1_px = (cx - bw / 2.0 - pad_dw) / scale_r
+                            y1_px = (cy - bh / 2.0 - pad_dh) / scale_r
+                            x2_px = (cx + bw / 2.0 - pad_dw) / scale_r
+                            y2_px = (cy + bh / 2.0 - pad_dh) / scale_r
+                            xmin = max(0.0, min(1.0, x1_px / float(src_w)))
+                            ymin = max(0.0, min(1.0, y1_px / float(src_h)))
+                            xmax = max(0.0, min(1.0, x2_px / float(src_w)))
+                            ymax = max(0.0, min(1.0, y2_px / float(src_h)))
+                            boxes_xywh.append([int(xmin * 640), int(ymin * 640), int((xmax - xmin) * 640), int((ymax - ymin) * 640)])
+                            scores_list.append(score)
+                            class_ids.append(class_id)
+                            norm_boxes.append((xmin, ymin, xmax, ymax))
+
+                    if boxes_xywh:
+                        indices = cv2.dnn.NMSBoxes(boxes_xywh, scores_list, CONF_THRESHOLD, 0.45)
+                        flat_indices = [int(i[0]) if isinstance(i, (list, tuple, np.ndarray)) else int(i) for i in indices]
+                        best_score = -1.0
+                        for idx in flat_indices:
+                            xmin, ymin, xmax, ymax = norm_boxes[idx]
+                            score = scores_list[idx]
+                            cid = class_ids[idx]
+                            detections_found.append({
+                                "class": TARGET_CLASSES[cid],
+                                "conf": round(score, 2),
+                                "box": [round(xmin, 3), round(ymin, 3), round(xmax, 3), round(ymax, 3)]
+                            })
+                            if score > best_score:
+                                best_score = score
+                                best_crop_jpeg, best_crop_bounds = _encode_target_crop(
+                                    m_frame, xmin, ymin, xmax, ymax, return_bounds=True
+                                )
+                                best_crop_frame_shape = m_frame.shape
+                except Exception as e:
+                    print(f"[!] CPU ONNX fallback warning: {e}", file=sys.stderr)
+
+            # Fallback 2: Multi-frame inter-frame motion ROI crop if NPU/ONNX unavailable
+            if not hailo_available and not best_crop_jpeg and len(captured_pairs) >= 2:
+                try:
+                    g1 = cv2.cvtColor(captured_pairs[0][0], cv2.COLOR_BGR2GRAY)
+                    g2 = cv2.cvtColor(captured_pairs[-1][0], cv2.COLOR_BGR2GRAY)
+                    diff = cv2.absdiff(cv2.GaussianBlur(g1, (5, 5), 0), cv2.GaussianBlur(g2, (5, 5), 0))
+                    _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+                    cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    if cnts:
+                        largest = max(cnts, key=cv2.contourArea)
+                        if cv2.contourArea(largest) > 400:
+                            rx, ry, rw, rh = cv2.boundingRect(largest)
+                            xmin, ymin = rx / 640.0, ry / 640.0
+                            xmax, ymax = (rx + rw) / 640.0, (ry + rh) / 640.0
+                            detections_found.append({
+                                "class": "motion_target",
+                                "conf": 0.75,
+                                "box": [round(xmin, 3), round(ymin, 3), round(xmax, 3), round(ymax, 3)]
+                            })
+                            inference_backend = "motion_roi"
+                            best_crop_jpeg, best_crop_bounds = _encode_target_crop(
+                                captured_pairs[-1][1], xmin, ymin, xmax, ymax, return_bounds=True
+                            )
+                            best_crop_frame_shape = captured_pairs[-1][1].shape
+                except Exception:
+                    pass
+
+            # Remap detection bounding boxes into the cropped image's coordinate frame
+            if best_crop_jpeg and best_crop_bounds is not None:
+                detections_found = remap_detections_to_crop(
+                    detections_found, best_crop_bounds, best_crop_frame_shape
+                )
+
+            # Fallback 3: if no target detected or NPU unavailable, encode a scaled full-frame snapshot
+            if not best_crop_jpeg:
+                fallback_bgr = cv2.resize(main_frame, (960, 540))
+                if os.getenv("CAMERA_COLOR_SWAP_RB", "0") == "1":
+                    fallback_bgr = cv2.cvtColor(fallback_bgr, cv2.COLOR_RGB2BGR)
+                if not camera_ok:
+                    cv2.putText(fallback_bgr, "CAMERA SENSOR ERROR", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+                _, enc = cv2.imencode(".jpg", fallback_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 65])
+                best_crop_jpeg = enc.tobytes()
+
+            # Ensure 1000BASE-T / optical carrier has completed auto-negotiation before firing UDP burst.
+            # Avoid tearing down an already-locked link on every frame unless DIODE_FORCE_EVERY_CYCLE=1,
+            # eliminating the 6.1s (0.65s PHY reset + 4.1s 1000BASE-X lock + 1.35s IPv6 DAD) per-frame stall.
+            carrier_already_up = False
+            carrier_path = f"/sys/class/net/{iface}/carrier"
+            if os.path.exists(carrier_path):
+                try:
+                    with open(carrier_path, "r", encoding="utf-8") as cf:
+                        carrier_already_up = (cf.read().strip() == "1")
+                except Exception:
+                    carrier_already_up = False
+
+            if os.getenv("DIODE_AUTO_RENEGOTIATE", "0") == "1" and (
+                not carrier_already_up or os.getenv("DIODE_FORCE_EVERY_CYCLE", "0") == "1"
+            ):
+                renegotiate_optical_diode_link(iface=iface)
+            elif burst_idx == 0 or not carrier_already_up:
+                wait_for_ethernet_carrier(iface=iface, timeout_s=3.0)
+
+            # Evaluate hydrocarbon/wildfire smoke obscuration & fuse optional USB TOPDON TC001 8-14 um LWIR hotspots
+            lwir_smoke_meta = detect_smoke_obscuration_and_fuse_tc001_lwir(
+                main_frame, existing_detections=detections_found
+            )
+            detections_found = lwir_smoke_meta["fused_detections"]
+
+            if detections_found:
+                last_detection_ts = time.time()
+
+            preroll_snap_meta = parse_preroll_fast_snap_telemetry(pico_telemetry)
+            if not should_transmit_after_triage(
+                detections_found=detections_found,
+                pico_telemetry=pico_telemetry,
+                lwir_hotspots=lwir_smoke_meta["lwir_hotspots_detected"],
+            ):
+                now_after_triage = time.time()
+                session_elapsed_s = now_after_triage - session_start_ts
+                since_last_det_s = (now_after_triage - last_detection_ts) if last_detection_ts is not None else None
+                if not should_continue_warm_hold_loop(
+                    burst_idx=burst_idx,
+                    session_elapsed_s=session_elapsed_s,
+                    since_last_detection_s=since_last_det_s,
+                    detections_in_current_frame=0,
+                ):
+                    break
+                burst_idx += 1
+                continue
+
+            # Construct and fire alert payload over optical diode
+            subject_kinematics = estimate_subject_kinematics(
+                detections_found, pico_telemetry, captured_pairs=captured_pairs
+            )
+            tx_ts = time.time()
+            pi5_ms = max(1, int(round((tx_ts - pipeline_t0) * 1000.0)))
+            alert_payload = {
+                "node": NODE_ID,
+                "ts": int(tx_ts),
+                "capture_ts": round(pipeline_t0, 3),
+                "tx_ts": round(tx_ts, 3),
+                "pi5_ms": pi5_ms,
+                "burst_seq": burst_idx,
+                "pico_trig": pico_telemetry,
+                "preroll_fast_snap": preroll_snap_meta,
+                "detections": detections_found,
+                "subject_kinematics": subject_kinematics,
+                "lwir_smoke_fusion": {
+                    "smoke_or_fog_obscured": lwir_smoke_meta["smoke_or_fog_obscured"],
+                    "eo_rms_contrast": lwir_smoke_meta["eo_rms_contrast"],
+                    "vis_055um_transmission_pct": lwir_smoke_meta["vis_055um_transmission_pct"],
+                    "lwir_10um_transmission_pct": lwir_smoke_meta["lwir_10um_transmission_pct"],
+                    "tc001_lwir_sensor_active": lwir_smoke_meta["tc001_lwir_sensor_active"],
+                    "lwir_hotspots_detected": lwir_smoke_meta["lwir_hotspots_detected"],
+                },
+                "hailo_active": hailo_available,
+                "camera_ok": camera_ok,
+                "inference_backend": inference_backend,
+            }
+            transmit_over_diode(sock, alert_payload, best_crop_jpeg, custom_signing_key=active_signing_key)
+            spool_verified_alert_locally(alert_payload, best_crop_jpeg)
+
+            now_after_tx = time.time()
+            session_elapsed_s = now_after_tx - session_start_ts
+            since_last_det_s = (now_after_tx - last_detection_ts) if last_detection_ts is not None else None
+            if not should_continue_warm_hold_loop(
+                burst_idx=burst_idx,
+                session_elapsed_s=session_elapsed_s,
+                since_last_detection_s=since_last_det_s,
+                detections_in_current_frame=len(detections_found),
+            ):
+                break
+            burst_idx += 1
 
     except Exception as e:
         print(f"[CRITICAL] Uncaught exception in sender pipeline: {e}", file=sys.stderr)
     finally:
+        if picam2 is not None:
+            try:
+                picam2.stop()
+            except Exception:
+                pass
+        if sock is not None:
+            try:
+                sock.close()
+            except Exception:
+                pass
         # ABSOLUTE SAFETY INVARIANT: Always assert DONE to cut Domain B power
         signal_pico_done()
 

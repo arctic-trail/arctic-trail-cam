@@ -355,16 +355,38 @@ def try_reconstruct_image(prefix):
                     os.fsync(jf.fileno())
                 # Also update live_frame.jpg and live_frame.json atomically so dashboard_server.py
                 # displays the real incoming optical diode frame while packets are actively arriving.
+                rx_now = time.time()
+                pi5_ms_val = float(meta.get("pi5_ms", 420))
+                cap_ts_val = meta.get("capture_ts")
+                if cap_ts_val is not None:
+                    try:
+                        wall_diff = rx_now - float(cap_ts_val)
+                    except (TypeError, ValueError):
+                        wall_diff = -1.0
+                else:
+                    wall_diff = -1.0
+                # Use direct capture-to-collector wall-clock delta when clocks are synced (0.05s..30s),
+                # otherwise fall back to measured Pi 5 capture+inference time (pi5_ms) + 0.18s optical burst overhead
+                if 0.05 <= wall_diff <= 30.0:
+                    pipeline_delay_s = round(wall_diff, 2)
+                else:
+                    pipeline_delay_s = round(max(0.15, (pi5_ms_val / 1000.0) + 0.18), 2)
+
                 live_meta = {
                     "node": node_id,
                     "ts": ts,
-                    "updated_at": time.time(),
+                    "capture_ts": cap_ts_val,
+                    "tx_ts": meta.get("tx_ts"),
+                    "rx_ts": round(rx_now, 3),
+                    "updated_at": rx_now,
                     "nonce": nonce_val,
                     "img_sha256": computed_sha256,
                     "detections": meta.get("detections", []),
                     "pico_trig": meta.get("pico_trig", ""),
                     "stream_fps": meta.get("stream_fps", 1.0),
-                    "pi5_ms": meta.get("pi5_ms", 180),
+                    "pi5_ms": int(round(pi5_ms_val)),
+                    "pipeline_delay_s": pipeline_delay_s,
+                    "inference_backend": meta.get("inference_backend", "unknown"),
                 }
                 _atomic_write_bytes(os.path.join(OUT_DIR, "live_frame.jpg"), full_img)
                 _atomic_write_bytes(os.path.join(OUT_DIR, "live_frame.json"), json.dumps(live_meta).encode("utf-8"))

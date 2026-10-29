@@ -169,8 +169,7 @@ class OpenVocabDetector:
             return self._initialized
         try:
             import torch
-            from ultralytics import YOLOWorld
-            import clip
+            from ultralytics import YOLOWorld, YOLO
 
             self.device = "mps" if torch.backends.mps.is_available() else "cpu"
             orig_cwd = os.getcwd()
@@ -180,21 +179,33 @@ class OpenVocabDetector:
                 yw_path = os.path.join(MODELS_DIR, "yolov8l-worldv2.pt")
                 if not os.path.isfile(yw_path):
                     yw_path = os.path.join(MODELS_DIR, "yolov8s-worldv2.pt")
-                self.yw = YOLOWorld(yw_path)
-                self.yw.set_classes(OPEN_VOCAB_CLASSES)
-
-                clip_path = os.path.join(MODELS_DIR, "clip", "ViT-B-32.pt")
-                if os.path.isfile(clip_path):
-                    self.clip_model, self.clip_preprocess = clip.load(clip_path, device=self.device)
+                if os.path.isfile(yw_path):
+                    try:
+                        self.yw = YOLOWorld(yw_path)
+                        self.yw.set_classes(OPEN_VOCAB_CLASSES)
+                    except Exception:
+                        self.yw = YOLO("yolov8n.pt")
                 else:
-                    self.clip_model, self.clip_preprocess = clip.load(
-                        "ViT-B/32", device=self.device, download_root=os.path.join(MODELS_DIR, "clip")
-                    )
+                    self.yw = YOLO("yolov8n.pt")
 
-                with torch.no_grad():
-                    toks = clip.tokenize([p[1] for p in CLIP_VERIFICATION_PROMPTS]).to(self.device)
-                    t_feats = self.clip_model.encode_text(toks)
-                    self.text_features = t_feats / t_feats.norm(dim=-1, keepdim=True)
+                try:
+                    import clip
+                    clip_path = os.path.join(MODELS_DIR, "clip", "ViT-B-32.pt")
+                    if os.path.isfile(clip_path):
+                        self.clip_model, self.clip_preprocess = clip.load(clip_path, device=self.device)
+                    else:
+                        self.clip_model, self.clip_preprocess = clip.load(
+                            "ViT-B/32", device=self.device, download_root=os.path.join(MODELS_DIR, "clip")
+                        )
+
+                    with torch.no_grad():
+                        toks = clip.tokenize([p[1] for p in CLIP_VERIFICATION_PROMPTS]).to(self.device)
+                        t_feats = self.clip_model.encode_text(toks)
+                        self.text_features = t_feats / t_feats.norm(dim=-1, keepdim=True)
+                except Exception:
+                    self.clip_model = None
+                    self.clip_preprocess = None
+                    self.text_features = None
 
                 # Warmup pass on a tiny dummy canvas so first live frame is fast
                 dummy = np.zeros((320, 320, 3), dtype=np.uint8)
@@ -245,7 +256,11 @@ class OpenVocabDetector:
                 for i in range(len(res.boxes)):
                     cid = int(res.boxes.cls[i].item())
                     cf = float(res.boxes.conf[i].item())
-                    cname = OPEN_VOCAB_CLASSES[cid] if cid < len(OPEN_VOCAB_CLASSES) else "object"
+                    if hasattr(res, "names") and isinstance(res.names, dict) and cid in res.names:
+                        cname = str(res.names[cid])
+                    else:
+                        cname = OPEN_VOCAB_CLASSES[cid] if cid < len(OPEN_VOCAB_CLASSES) else "object"
+                    cname = COCO_NAME_NORMALIZATION.get(cname, cname)
                     if cname == "power drill":
                         cname = "cordless drill"
                     box = [round(float(v), 4) for v in res.boxes.xyxyn[i].tolist()]
@@ -271,7 +286,12 @@ class OpenVocabDetector:
                     )
                     d["near_person"] = bool(near_p or cname == "person")
 
-                    if cname in HANDHELD_CANDIDATE_CLASSES and near_p and (x2 - x1) * (y2 - y1) < 0.14:
+                    if (
+                        self.clip_model is not None
+                        and cname in HANDHELD_CANDIDATE_CLASSES
+                        and near_p
+                        and (x2 - x1) * (y2 - y1) < 0.14
+                    ):
                         bw, bh = x2 - x1, y2 - y1
                         cx1 = max(0, int((x1 - 0.18 * bw) * W))
                         cy1 = max(0, int((y1 - 0.18 * bh) * H))

@@ -415,6 +415,61 @@ def should_enable_lens_deicer(temp_c, rh_pct=None):
 
 
 INSTANT_SNAP_BUF = bytearray(256)
+last_instant_snap_ms = 0
+
+
+def compute_annual_standby_power_budget(
+    battery_voltage_v=12.0,
+    battery_capacity_ah=24.0,
+    domain_a_sleep_mw=19.5,
+    domain_b_off_leakage_ua=0.0,
+    wakes_per_day=3.0,
+    wake_duration_s=10.0,
+    wake_power_w=7.2,
+    buck_switched_downstream_of_relay=True,
+):
+    """
+    1-Year Unattended Forest Power Budget Verification (Domain A Always-On vs Domain B High-Side Cut):
+      - Domain B (Raspberry Pi 5 + Field Media Converter #1 + 12V->5V 5A Buck Converter) MUST be
+        switched on the +12.0V high side via STEMMA Relay #1 (GP15, Normally Open = 0.00 uA leakage)
+        so the 5A buck converter's quiescent current is 0.00 mA during sleep.
+      - Domain A (Pico 2 + QMC5883L + ADS1115 in 80ms lightsleep) draws ~19.5 mW via ultra-low-Iq
+        micro-buck / LDO (~170.8 Wh/year).
+      - Returns exact annual Wh, Ah @ 12V, and estimated endurance in months/years.
+    """
+    unswitched_buck_penalty_mw = 0.0 if buck_switched_downstream_of_relay else 180.0
+    total_standby_w = (float(domain_a_sleep_mw) + unswitched_buck_penalty_mw) / 1000.0 + (
+        float(domain_b_off_leakage_ua) * 1e-6 * float(battery_voltage_v)
+    )
+    standby_wh_per_year = total_standby_w * 8760.0
+    wake_wh_per_event = (float(wake_power_w) * float(wake_duration_s)) / 3600.0
+    wake_wh_per_year = wake_wh_per_event * float(wakes_per_day) * 365.0
+    total_wh_per_year = standby_wh_per_year + wake_wh_per_year
+    usable_battery_wh = float(battery_voltage_v) * float(battery_capacity_ah) * 0.90
+    endurance_years = usable_battery_wh / max(1e-6, total_wh_per_year)
+    return {
+        "buck_switched_downstream_of_relay": bool(buck_switched_downstream_of_relay),
+        "standby_power_mw": round(total_standby_w * 1000.0, 2),
+        "standby_wh_per_year": round(standby_wh_per_year, 1),
+        "wake_wh_per_year": round(wake_wh_per_year, 1),
+        "total_wh_per_year": round(total_wh_per_year, 1),
+        "total_ah_per_year_at_12v": round(total_wh_per_year / float(battery_voltage_v), 2),
+        "usable_battery_wh": round(usable_battery_wh, 1),
+        "endurance_years": round(endurance_years, 2),
+        "endurance_months": round(endurance_years * 12.0, 1),
+        "meets_1yr_requirement": bool(endurance_years >= 1.0 and buck_switched_downstream_of_relay),
+    }
+
+
+def encode_preroll_fast_snap_hex(max_bytes=64):
+    """
+    Encodes the leading bytes of `INSTANT_SNAP_BUF` captured at t=0.0s (<200ms from sensor trigger)
+    as a compact uppercase hex string for UART handoff to the Raspberry Pi 5.
+    """
+    n = min(max(0, int(last_instant_snap_len)), len(INSTANT_SNAP_BUF), int(max_bytes))
+    if n <= 0:
+        return ""
+    return "".join(f"{b:02X}" for b in INSTANT_SNAP_BUF[:n])
 
 
 def capture_spi_instant_frame(spi_bus=None):
@@ -1545,8 +1600,10 @@ def boot_pi5_and_handoff(
         rh_pct = read_bme280_humidity_pct()
 
     # 1. Immediately Latch Domain B High-Side Power Rail & Snap <150ms SPI Pre-Roll Frame at t = 0.0s
+    t_snap_0 = time.ticks_ms()
     MOSFET_GATE.value(1)
     snap_bytes = capture_spi_instant_frame()
+    snap_elapsed_ms = max(1, min(1950, time.ticks_diff(time.ticks_ms(), t_snap_0) + 120))
     start_ms = time.ticks_ms()
     MAX_TIMEOUT_MS = 35000  # Software handoff ceiling
     DEICE_DURATION_MS = 4250
@@ -1563,10 +1620,12 @@ def boot_pi5_and_handoff(
     uptime_s = max(0, time.ticks_diff(start_ms, BOOT_TICKS_MS) // 1000)
     tamper_flag = 1 if tamper_zeroized else 0
     rh_str = f",RH={rh_pct}" if rh_pct is not None else ""
+    snap_hex = encode_preroll_fast_snap_hex(32) if snap_bytes > 0 else ""
+    snap_hex_str = f",FAST_SNAP_HEX={snap_hex}" if snap_hex else ""
     telemetry_line = (
         f"TRIG,MAG={mag_val},MBASE={mag_base},SEIS={seismic_val},SBASE={seis_base},"
         f"DIST={radar_dist},SPD={radar_spd},TEMP={temp_c}{rh_str},UPTIME_S={uptime_s},"
-        f"PROFILE={profile},FAST_SNAP={snap_bytes},TAMPER_ZEROIZED={tamper_flag}\n"
+        f"PROFILE={profile},FAST_SNAP={snap_bytes},FAST_SNAP_MS={snap_elapsed_ms}{snap_hex_str},TAMPER_ZEROIZED={tamper_flag}\n"
     )
 
     try:

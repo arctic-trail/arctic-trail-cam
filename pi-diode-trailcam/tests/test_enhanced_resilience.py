@@ -318,6 +318,66 @@ def run_resilience_test_suite():
         with open(os.path.join(pkg_root, "collector_hub", "ui", "index.html"), "r", encoding="utf-8") as uf:
             u_code = uf.read()
         assert "NO LIVE CAMERA SIGNAL (OPTICAL DIODE LINK OFFLINE)" in u_code
+        assert "cam-corner-delay-hud" in u_code
+
+        assert hasattr(sender_node, "should_continue_warm_hold_loop"), "Missing should_continue_warm_hold_loop in sender_node"
+        # Branch 1: Minimum warm burst frames (burst_idx=0, 1 < min_burst_frames=3 -> True)
+        assert sender_node.should_continue_warm_hold_loop(
+            burst_idx=0, session_elapsed_s=0.7, since_last_detection_s=None, detections_in_current_frame=0,
+            min_burst_frames=3, hold_after_detection_s=12.0, max_session_s=24.0
+        ) is True
+        # Branch 2: No detections after min_burst_frames reached -> False (powers down cleanly)
+        assert sender_node.should_continue_warm_hold_loop(
+            burst_idx=2, session_elapsed_s=2.1, since_last_detection_s=None, detections_in_current_frame=0,
+            min_burst_frames=3, hold_after_detection_s=12.0, max_session_s=24.0
+        ) is False
+        # Branch 3: Active detection or within 12.0s post-detection hold -> True (streams at ~0.6s intervals)
+        assert sender_node.should_continue_warm_hold_loop(
+            burst_idx=5, session_elapsed_s=4.5, since_last_detection_s=3.2, detections_in_current_frame=0,
+            min_burst_frames=3, hold_after_detection_s=12.0, max_session_s=24.0
+        ) is True
+        # Branch 4: Hard 24.0s session ceiling before Pico 35.0s hardware watchdog -> False
+        assert sender_node.should_continue_warm_hold_loop(
+            burst_idx=15, session_elapsed_s=24.1, since_last_detection_s=0.1, detections_in_current_frame=2,
+            min_burst_frames=3, hold_after_detection_s=12.0, max_session_s=24.0
+        ) is False
+
+        # Gap 4: AI Triage Gate & Local Black-Box Spooling
+        assert sender_node.should_transmit_after_triage(
+            detections_found=[], pico_telemetry="TRIG,MAG=120,SEIS=0,SPD=0,FAST_SNAP=0", suppress_empty_frames=True
+        ) is False
+        assert sender_node.should_transmit_after_triage(
+            detections_found=[{"class": "person", "conf": 0.91}], pico_telemetry="TRIG,MAG=120", suppress_empty_frames=True
+        ) is True
+        assert sender_node.should_transmit_after_triage(
+            detections_found=[], pico_telemetry="TRIG,MAG=120,FAST_SNAP=4096,FAST_SNAP_MS=140,FAST_SNAP_HEX=FFD8FFE0", suppress_empty_frames=True
+        ) is True
+
+        # Gap 5: Sub-2-Second Pre-Roll Snapshot Extraction
+        preroll_meta = sender_node.parse_preroll_fast_snap_telemetry(
+            "TRIG,MAG=120,FAST_SNAP=4096,FAST_SNAP_MS=140,FAST_SNAP_HEX=FFD8FFE000104A464946"
+        )
+        assert preroll_meta["preroll_captured"] is True
+        assert preroll_meta["preroll_snap_ms"] == 140
+        assert preroll_meta["under_2s_sensory_sla"] is True
+        assert preroll_meta["preroll_header_hex"].startswith("FFD8FFE0")
+
+        # Local Black-Box Spool Ring-Buffer Verification
+        spool_test_dir = os.path.join(tmp_out_dir, "local_spool_test")
+        for s_i in range(4):
+            sp_path = sender_node.spool_verified_alert_locally(
+                {"node": "NODE-NORTH-01", "ts": 1793200000 + s_i, "nonce": f"001122334455660{s_i}"},
+                b"\xff\xd8\xff\xe0JFIF_TEST",
+                spool_dir=spool_test_dir,
+                max_spool_files=2,
+            )
+            assert sp_path is not None and os.path.exists(sp_path)
+        spool_jpgs = [fn for fn in os.listdir(spool_test_dir) if fn.endswith(".jpg")]
+        assert len(spool_jpgs) == 2
+
+        # Gap 6: UX Armed Standby (0.00W Forest Sleep) vs Continuous Bench Mode
+        assert "ARMED STANDBY • 0.00W FOREST SLEEP" in u_code
+        assert "autonomous_standby" in d_code
 
         print("    [+] Real-World Photo Build Sheets (Photos 1–58), Hole Map, Boot-Order Hardening & macOS Anti-Metadata: PASSED")
         test_passed += 1

@@ -8,6 +8,15 @@ License: MIT
 """
 import os
 import sys
+
+try:
+    import cv2  # noqa: F401
+    import ultralytics  # noqa: F401
+except ModuleNotFoundError:
+    _PY313 = "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
+    if os.path.exists(_PY313) and os.path.realpath(sys.executable) != os.path.realpath(_PY313):
+        os.execv(_PY313, [_PY313, "-B"] + sys.argv)
+
 import json
 import time
 import errno
@@ -39,11 +48,14 @@ LIVE_FRAME_STATE = {
 CAMERA_CONTROL_LOCK = threading.Lock()
 CAMERA_CONTROL_STATE = {
     "rev": 1,
-    "picture_mode": "natural",   # 'natural' | 'vivid' | 'night_ir' | 'low_glare' | 'raw'
-    "focus_mode": "continuous",  # 'continuous' | 'room_3m' | 'handheld_60cm' | 'macro_18cm' | 'manual'
-    "lens_position": 0.35,       # 0.0 (Infinity) to 8.0 (12.5cm Macro) diopters
-    "hdr": False,                # True -> --hdr sensor
-    "ev": -0.35,                 # -1.5 to +1.5 EV
+    "picture_mode": "natural",             # 'natural' | 'vivid' | 'night_ir' | 'low_glare' | 'raw'
+    "focus_mode": "continuous",            # 'continuous' | 'room_3m' | 'handheld_60cm' | 'macro_18cm' | 'manual'
+    "lens_position": 0.35,                 # 0.0 (Infinity) to 8.0 (12.5cm Macro) diopters
+    "hdr": False,                          # True -> --hdr sensor
+    "ev": -0.35,                           # -1.5 to +1.5 EV
+    "operating_mode": "continuous_bench",  # 'continuous_bench' | 'autonomous_standby' (only when hardware DONE sleep is active)
+    "triage_suppress_empty": True,         # True -> Only transmit over optical diode when AI/sensor target verified
+    "show_last_frame_in_standby": True,    # True -> Keep last verified optical-diode photo visible when link is idle
 }
 
 SMART_CAPTURE_LOCK = threading.Lock()
@@ -1389,7 +1401,7 @@ def make_command_center_handler(alerts_dir, verbose=False, demo_mode=False):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 now_ts = time.time()
-                MAX_LIVE_FRAME_AGE_SEC = 18.0
+                MAX_LIVE_FRAME_AGE_SEC = 45.0
                 with LIVE_FRAME_LOCK:
                     meta = LIVE_FRAME_STATE["meta"]
                     updated_at = LIVE_FRAME_STATE["updated_at"]
@@ -1412,7 +1424,7 @@ def make_command_center_handler(alerts_dir, verbose=False, demo_mode=False):
                             if (
                                 jpeg_bytes
                                 and GLOBAL_DETECTOR is not None
-                                and (meta or {}).get("inference_backend") != "pi5_local_edge_ai"
+                                and not (meta or {}).get("detections")
                             ):
                                 try:
                                     ov_dets, ov_ms = GLOBAL_DETECTOR.detect_on_jpeg(
@@ -1423,6 +1435,16 @@ def make_command_center_handler(alerts_dir, verbose=False, demo_mode=False):
                                         meta["standing_count"] = len(ov_dets)
                                         if ov_ms > 0:
                                             meta["ov_ms"] = ov_ms
+                                        try:
+                                            with open(lf_path, "w", encoding="utf-8") as lfw:
+                                                json.dump(meta, lfw)
+                                        except Exception:
+                                            pass
+                                except Exception:
+                                    pass
+                            if jpeg_bytes and meta:
+                                try:
+                                    evaluate_and_save_novel_capture(alerts_dir, meta, jpeg_bytes)
                                 except Exception:
                                     pass
                             updated_at = disk_mtime
@@ -1438,6 +1460,25 @@ def make_command_center_handler(alerts_dir, verbose=False, demo_mode=False):
 
                 age_sec = (now_ts - updated_at) if updated_at > 0 else 999999.0
                 active = (meta is not None) and (age_sec <= MAX_LIVE_FRAME_AGE_SEC)
+                frame_age_sec = round(max(0.0, age_sec), 1) if updated_at > 0 else None
+                if meta is not None:
+                    raw_pipe_s = meta.get("pipeline_delay_s")
+                    if raw_pipe_s is not None:
+                        try:
+                            pipeline_delay_sec = round(max(0.05, float(raw_pipe_s)), 2)
+                        except (TypeError, ValueError):
+                            pipeline_delay_sec = 0.60
+                    else:
+                        pi5_s = float(meta.get("pi5_ms", 420)) / 1000.0
+                        ov_s = float(meta.get("ov_ms", 0)) / 1000.0
+                        pipeline_delay_sec = round(max(0.15, pi5_s + ov_s + 0.18), 2)
+                else:
+                    pipeline_delay_sec = None
+                est_total_delay_sec = (
+                    round(pipeline_delay_sec + max(0.0, age_sec), 1)
+                    if (pipeline_delay_sec is not None and updated_at > 0)
+                    else None
+                )
 
                 # Fast-path ONLY when the stream is genuinely active (<= MAX_LIVE_FRAME_AGE_SEC) and unchanged
                 if active and since_seq >= 0 and seq == since_seq:
@@ -1445,7 +1486,9 @@ def make_command_center_handler(alerts_dir, verbose=False, demo_mode=False):
                         "active": True,
                         "changed": False,
                         "seq": seq,
-                        "age_sec": round(age_sec, 1),
+                        "age_sec": frame_age_sec,
+                        "pipeline_delay_sec": pipeline_delay_sec,
+                        "est_total_delay_sec": est_total_delay_sec,
                     }).encode("utf-8"))
                     return
 
@@ -1455,14 +1498,32 @@ def make_command_center_handler(alerts_dir, verbose=False, demo_mode=False):
                     caps_slice = list(caps[:16])
                 with CAMERA_CONTROL_LOCK:
                     cam_ctrl_copy = dict(CAMERA_CONTROL_STATE)
+                op_mode = cam_ctrl_copy.get("operating_mode", "continuous_bench")
+                standby_armed = (op_mode == "autonomous_standby") and (updated_at > 0 or len(caps_slice) > 0)
+                last_verified_summary = None
+                if meta is not None and updated_at > 0:
+                    last_verified_summary = {
+                        "node": meta.get("node", "NODE-NORTH-01"),
+                        "last_rx_age_sec": frame_age_sec,
+                        "pico_trig": meta.get("pico_trig", ""),
+                        "detections_count": len(meta.get("detections") or []),
+                        "preroll_fast_snap": meta.get("preroll_fast_snap"),
+                    }
                 self.wfile.write(json.dumps({
                     "active": active,
                     "stale": not active,
-                    "age_sec": round(age_sec, 1) if updated_at > 0 else None,
+                    "standby_armed": standby_armed,
+                    "operating_mode": op_mode,
+                    "last_verified_summary": last_verified_summary,
+                    "age_sec": frame_age_sec,
+                    "pipeline_delay_sec": pipeline_delay_sec,
+                    "est_total_delay_sec": est_total_delay_sec,
                     "seq": seq if active else 0,
+                    "last_seq": seq if (meta is not None and updated_at > 0) else 0,
                     "source": src,
                     "updated_at": updated_at if updated_at > 0 else None,
                     "frame": meta if active else None,
+                    "last_frame": meta if (meta is not None and updated_at > 0) else None,
                     "cam_ctrl": cam_ctrl_copy,
                     "smart_captures": {
                         "auto_enabled": auto_en,
@@ -1512,18 +1573,18 @@ def make_command_center_handler(alerts_dir, verbose=False, demo_mode=False):
                 return
 
             if clean_path == "/api/live_frame.jpg":
-                # Strict hardware freshness gate: never serve a stale/cached JPEG when link is down
                 now_ts = time.time()
-                MAX_LIVE_FRAME_AGE_SEC = 18.0
+                MAX_LIVE_FRAME_AGE_SEC = 45.0
+                allow_last = "last=1" in (parsed.query or "")
                 with LIVE_FRAME_LOCK:
                     jpeg_bytes = LIVE_FRAME_STATE["jpeg"]
                     mem_updated = LIVE_FRAME_STATE["updated_at"]
-                if not jpeg_bytes or (now_ts - mem_updated) > MAX_LIVE_FRAME_AGE_SEC:
+                if not jpeg_bytes or (not allow_last and (now_ts - mem_updated) > MAX_LIVE_FRAME_AGE_SEC):
                     jpeg_bytes = None
                     jpg_path = os.path.join(alerts_dir, "live_frame.jpg")
                     if os.path.isfile(jpg_path):
                         try:
-                            if (now_ts - os.path.getmtime(jpg_path)) <= MAX_LIVE_FRAME_AGE_SEC:
+                            if allow_last or (now_ts - os.path.getmtime(jpg_path)) <= MAX_LIVE_FRAME_AGE_SEC:
                                 with open(jpg_path, "rb") as jf:
                                     jpeg_bytes = jf.read()
                         except Exception:
@@ -1704,6 +1765,12 @@ def make_command_center_handler(alerts_dir, verbose=False, demo_mode=False):
                             CAMERA_CONTROL_STATE["hdr"] = bool(payload["hdr"])
                         if "ev" in payload:
                             CAMERA_CONTROL_STATE["ev"] = round(max(-2.0, min(2.0, float(payload["ev"]))), 2)
+                        if "operating_mode" in payload and payload["operating_mode"] in ("autonomous_standby", "continuous_bench"):
+                            CAMERA_CONTROL_STATE["operating_mode"] = payload["operating_mode"]
+                        if "triage_suppress_empty" in payload:
+                            CAMERA_CONTROL_STATE["triage_suppress_empty"] = bool(payload["triage_suppress_empty"])
+                        if "show_last_frame_in_standby" in payload:
+                            CAMERA_CONTROL_STATE["show_last_frame_in_standby"] = bool(payload["show_last_frame_in_standby"])
                         CAMERA_CONTROL_STATE["rev"] = int(CAMERA_CONTROL_STATE.get("rev", 1)) + 1
                         cam_ctrl_copy = dict(CAMERA_CONTROL_STATE)
                     self.send_response(200)

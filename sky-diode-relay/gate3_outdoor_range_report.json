@@ -1,6 +1,10 @@
 {
   "schema": "SKY_DIODE_RELAY_GATE3_OUTDOOR_ACCEPTANCE_V1",
-  "timestamp_utc": "2026-10-28T14:07:04Z",
+  "timestamp_utc": "2026-10-28T23:57:40Z",
+  "mode": "SIMULATED_SELF_TEST",
+  "live_ota_telemetry": {
+    "live_hardware_detected": false
+  },
   "hardware_stack": {
     "sdr": "2x Analog Devices ADALM-PLUTO (325-3800 MHz)",
     "pa": "Skyworks SE2576L-EK1 (+50.50 dB bench power jump verified at 2.425 GHz)",
@@ -43,7 +47,7 @@
       "wideband_channel_snr_db": -8.5,
       "true_cfo_hz": 185.0,
       "locked_cfo_hz": 186.1,
-      "repaired_fec_erasures": 42,
+      "repaired_fec_erasures": 43,
       "ed25519_signature_valid": true,
       "verdict": "PASS"
     },
@@ -62,7 +66,7 @@
       "wideband_channel_snr_db": -9.5,
       "true_cfo_hz": 185.0,
       "locked_cfo_hz": 186.5,
-      "repaired_fec_erasures": 40,
+      "repaired_fec_erasures": 49,
       "ed25519_signature_valid": true,
       "verdict": "PASS"
     }

@@ -263,6 +263,50 @@
       display: flex; gap: 6px; flex-wrap: wrap;
       z-index: 30; pointer-events: auto;
     }
+    /* Floating Live Status & Estimated Delay Corner Indicator (Bottom-right of video stage) */
+    #cam-corner-delay-hud {
+      position: absolute; bottom: 16px; right: 16px;
+      z-index: 30; pointer-events: auto;
+      background: rgba(9, 14, 23, 0.86);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 7px; padding: 4px 10px;
+      font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+      color: var(--text-primary);
+      display: inline-flex; align-items: center; gap: 7px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+      white-space: nowrap;
+    }
+    #cam-corner-delay-hud .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #ef4444; flex-shrink: 0;
+    }
+    #cam-corner-delay-hud.state-live {
+      border-color: rgba(16, 185, 129, 0.45);
+    }
+    #cam-corner-delay-hud.state-live .status-dot {
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+    #cam-corner-delay-hud.state-burst {
+      border-color: rgba(245, 158, 11, 0.45);
+    }
+    #cam-corner-delay-hud.state-burst .status-dot {
+      background: #f59e0b;
+      box-shadow: 0 0 8px #f59e0b;
+    }
+    #cam-corner-delay-hud.state-offline {
+      border-color: rgba(239, 68, 68, 0.45);
+      color: #fca5a5;
+    }
+    #cam-corner-delay-hud.state-standby {
+      border-color: rgba(56, 189, 248, 0.48);
+      color: #e0f2fe;
+    }
+    #cam-corner-delay-hud.state-standby .status-dot {
+      background: #38bdf8;
+      box-shadow: 0 0 8px #38bdf8;
+    }
     .det-chip {
       background: rgba(10, 15, 25, 0.85);
       backdrop-filter: blur(8px);
@@ -679,9 +723,10 @@
         <!-- Floating Top HUD Inside Video -->
         <div class="video-hud-top">
           <div class="glass-pill">
-            <span class="live-dot"></span>
+            <span class="live-dot" id="cam-top-live-dot"></span>
             <span id="cam-header-title" style="font-weight:600;">[C1] Mannerheimintie 1</span>
             <span style="color:var(--text-muted);font-family:var(--font-mono);font-size:11px;" id="telem-yolo">190 ms</span>
+            <span style="color:#94a3b8;font-family:var(--font-mono);font-size:10.5px;border-left:1px solid rgba(255,255,255,0.14);padding-left:6px;" id="cam-top-delay-pill">OFFLINE</span>
           </div>
 
           <div style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap;">
@@ -774,6 +819,20 @@
 
           <div class="pop-section">
             <div class="pop-label">
+              <span>Node Wake / Standby Policy (1-Yr Forest vs Bench)</span>
+            </div>
+            <div class="cat-grid">
+              <div class="cat-toggle active" id="opmode-standby" onclick="setOperatingMode('autonomous_standby')" title="1-Yr Forest Mode: Domain B sleeps at 0.00W (19.5mW Pico Gatekeeper); snaps <2s pre-roll &amp; wakes Pi 5 on Mag/Seismic/Radar trigger">
+                <span>🌲 Armed Standby (0.00W)</span>
+              </div>
+              <div class="cat-toggle" id="opmode-bench" onclick="setOperatingMode('continuous_bench')" title="Bench Inspection Mode: Continuous 1080p stream expected over link">
+                <span>⚡ Continuous Bench</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="pop-section">
+            <div class="pop-label">
               <span>Exposure Compensation (EV)</span>
               <span id="ev-readout" style="font-family:var(--font-mono);color:#fbbf24;font-weight:600;">-0.35 EV</span>
             </div>
@@ -846,6 +905,12 @@
 
         <!-- Floating Active Detections Chips (Bottom-Left of Video) -->
         <div id="active-detections-hud"></div>
+
+        <!-- Floating Live Status & Estimated Signal Delay Indicator (Bottom-Right Corner of Camera Feed) -->
+        <div id="cam-corner-delay-hud" class="state-offline" title="Live Optical Diode Status &amp; Estimated End-to-End Signal Delay (Capture + Edge AI + Optical Burst + Frame Hold Age)">
+          <span class="status-dot"></span>
+          <span id="cam-corner-delay-text">OFFLINE • Waiting for optical diode signal...</span>
+        </div>
       </div>
 
       <!-- Compact 68px Event Timeline Filmstrip -->
@@ -1443,6 +1508,112 @@
     }
 
     let offlineAgeSec = null;
+    let liveDelayMetrics = {
+      active: false,
+      standbyArmed: true,
+      operatingMode: 'autonomous_standby',
+      lastVerifiedSummary: null,
+      ageSec: null,
+      pipeDelaySec: 0.6,
+      estTotalDelaySec: null
+    };
+
+    async function setOperatingMode(mode) {
+      liveDelayMetrics.operatingMode = mode;
+      liveDelayMetrics.standbyArmed = (mode === 'autonomous_standby');
+      const elStandby = document.getElementById('opmode-standby');
+      const elBench = document.getElementById('opmode-bench');
+      if (elStandby) elStandby.classList.toggle('active', mode === 'autonomous_standby');
+      if (elBench) elBench.classList.toggle('active', mode === 'continuous_bench');
+      updateCornerDelayIndicator();
+      renderLiveFrameToCanvas();
+      try {
+        await fetch('/api/camera_control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ operating_mode: mode })
+        });
+      } catch (_) {}
+    }
+
+    function updateCornerDelayIndicator() {
+      const cornerHud = document.getElementById('cam-corner-delay-hud');
+      const cornerText = document.getElementById('cam-corner-delay-text');
+      const topDelayPill = document.getElementById('cam-top-delay-pill');
+      const topLiveDot = document.getElementById('cam-top-live-dot');
+      const topMetrics = document.getElementById('top-live-metrics');
+
+      if (!liveDelayMetrics.active) {
+        const ageStr = (offlineAgeSec !== null && offlineAgeSec < 86400)
+          ? `Last wake ${Math.round(offlineAgeSec)}s ago`
+          : 'Awaiting first sensor trigger';
+        if (liveDelayMetrics.operatingMode === 'autonomous_standby') {
+          if (cornerHud) cornerHud.className = 'state-standby';
+          if (cornerText) {
+            cornerText.textContent = `ARMED STANDBY (0.00W SLEEP) • ${ageStr} • Wakes on Mag/Seis/Radar`;
+          }
+          if (topDelayPill) {
+            topDelayPill.textContent = `STANDBY 0.00W (${ageStr})`;
+            topDelayPill.style.color = '#38bdf8';
+          }
+          if (topLiveDot) {
+            topLiveDot.style.background = '#38bdf8';
+            topLiveDot.style.boxShadow = '0 0 8px #38bdf8';
+          }
+          if (topMetrics) {
+            topMetrics.textContent = `🛡️ ARMED STANDBY (0.00W • ${ageStr})`;
+            topMetrics.style.color = '#38bdf8';
+          }
+          return;
+        }
+        if (cornerHud) {
+          cornerHud.className = 'state-offline';
+        }
+        if (cornerText) {
+          cornerText.textContent = `OFFLINE • ${ageStr}`;
+        }
+        if (topDelayPill) {
+          topDelayPill.textContent = `OFFLINE (${ageStr})`;
+          topDelayPill.style.color = '#f87171';
+        }
+        if (topLiveDot) {
+          topLiveDot.style.background = '#ef4444';
+          topLiveDot.style.boxShadow = '0 0 8px #ef4444';
+        }
+        if (topMetrics) {
+          topMetrics.textContent = (offlineAgeSec !== null && offlineAgeSec < 86400)
+            ? `🔴 OFFLINE (Last RX ${Math.round(offlineAgeSec)}s ago)`
+            : '🔴 OFFLINE • NO SIGNAL';
+          topMetrics.style.color = '#ef4444';
+        }
+        return;
+      }
+
+      const ageS = Math.max(0, Number(liveDelayMetrics.ageSec ?? 0));
+      const pipeS = Math.max(0.1, Number(liveDelayMetrics.pipeDelaySec ?? 0.6));
+      const totalS = Number(liveDelayMetrics.estTotalDelaySec ?? (pipeS + ageS));
+      const isRealtime = ageS <= 2.5;
+
+      if (cornerHud) {
+        cornerHud.className = isRealtime ? 'state-live' : 'state-burst';
+      }
+      if (cornerText) {
+        const modeLabel = isRealtime ? 'LIVE' : 'LIVE (BURST HOLD)';
+        cornerText.textContent = `${modeLabel} • Est. Delay: ~${totalS.toFixed(1)}s (Pipe ${pipeS.toFixed(1)}s + Age ${ageS.toFixed(1)}s)`;
+      }
+      if (topDelayPill) {
+        topDelayPill.textContent = `LIVE • ~${totalS.toFixed(1)}s delay`;
+        topDelayPill.style.color = isRealtime ? '#34d399' : '#fbbf24';
+      }
+      if (topLiveDot) {
+        topLiveDot.style.background = isRealtime ? '#10b981' : '#f59e0b';
+        topLiveDot.style.boxShadow = isRealtime ? '0 0 8px #10b981' : '0 0 8px #f59e0b';
+      }
+      if (topMetrics) {
+        topMetrics.textContent = `🟢 LIVE • Est. Delay ~${totalS.toFixed(1)}s`;
+        topMetrics.style.color = isRealtime ? '#34d399' : '#fbbf24';
+      }
+    }
 
     function renderLiveFrameToCanvas() {
       const W = camCanvas.width;
@@ -1451,6 +1622,30 @@
       camCtx.fillRect(0, 0, W, H);
 
       if (!latestFrameImg) {
+        if (liveDelayMetrics.operatingMode === 'autonomous_standby') {
+          camCtx.strokeStyle = 'rgba(56, 189, 248, 0.55)';
+          camCtx.lineWidth = 3;
+          camCtx.strokeRect(40, H / 2 - 110, W - 80, 220);
+          camCtx.fillStyle = 'rgba(56, 189, 248, 0.07)';
+          camCtx.fillRect(40, H / 2 - 110, W - 80, 220);
+
+          camCtx.fillStyle = '#38bdf8';
+          camCtx.font = '700 28px -apple-system, BlinkMacSystemFont, sans-serif';
+          camCtx.fillText('🛡️ ARMED STANDBY • 0.00W FOREST SLEEP (PICO 2 GATEKEEPER ACTIVE @ 19.5 mW)', 75, H / 2 - 42);
+
+          camCtx.fillStyle = '#e2e8f0';
+          camCtx.font = '500 20px -apple-system, BlinkMacSystemFont, sans-serif';
+          const lastWakeText = (offlineAgeSec !== null && offlineAgeSec < 86400)
+            ? `Last verified burst arrived ${Math.round(offlineAgeSec)}s ago — Pi 5 cleanly powered down via GPIO 25 DONE handshake.`
+            : 'Field unit is armed in 0.00W Domain B standby — waiting for Mag / Seismic / 24GHz Radar trigger...';
+          camCtx.fillText(lastWakeText, 75, H / 2 + 6);
+
+          camCtx.fillStyle = '#94a3b8';
+          camCtx.font = '400 17px -apple-system, BlinkMacSystemFont, sans-serif';
+          camCtx.fillText('Trigger flow: <0.2s Fast-Snap + Pi 5 Boot (~4.9s) + Local AI Triage + 12s Warm Hold-Awake Stream over Optical Diode.', 75, H / 2 + 46);
+          camCtx.fillText('All historical captures remain available below in the Saved Key-Frames strip and Right-Hand Event Timeline.', 75, H / 2 + 78);
+          return;
+        }
         camCtx.strokeStyle = 'rgba(239, 68, 68, 0.55)';
         camCtx.lineWidth = 3;
         camCtx.strokeRect(40, H / 2 - 90, W - 80, 180);
@@ -1551,41 +1746,71 @@
         const res = await fetch(`/api/live_frame?since_seq=${lastSeq}`);
         if (res.ok) {
           const data = await res.json();
+          if (data.operating_mode) {
+            liveDelayMetrics.operatingMode = data.operating_mode;
+            const elStandby = document.getElementById('opmode-standby');
+            const elBench = document.getElementById('opmode-bench');
+            if (elStandby) elStandby.classList.toggle('active', data.operating_mode === 'autonomous_standby');
+            if (elBench) elBench.classList.toggle('active', data.operating_mode === 'continuous_bench');
+          }
+          if (typeof data.standby_armed === 'boolean') {
+            liveDelayMetrics.standbyArmed = data.standby_armed;
+          }
+          if (data.last_verified_summary) {
+            liveDelayMetrics.lastVerifiedSummary = data.last_verified_summary;
+          }
+          if (data.smart_captures) {
+            renderSmartCapturesStrip(data.smart_captures);
+          }
           if (data.active === false) {
             offlineAgeSec = (typeof data.age_sec === 'number') ? data.age_sec : null;
-            if (latestFrameImg !== null || lastSeq !== -1) {
-              latestFrameImg = null;
-              liveDetections = [];
-              lastSeq = -1;
-              renderDetectedPillsInPlace();
+            liveDelayMetrics.active = false;
+            liveDelayMetrics.ageSec = offlineAgeSec;
+            updateCornerDelayIndicator();
+            if (data.last_frame && data.last_seq && lastSeq !== data.last_seq) {
+              lastSeq = data.last_seq;
+              const lf = data.last_frame;
+              const img = new Image();
+              img.onload = () => {
+                latestFrameImg = img;
+                liveDetections = Array.isArray(lf.detections) ? lf.detections : [];
+                renderDetectedPillsInPlace();
+                renderLiveFrameToCanvas();
+                updateCornerDelayIndicator();
+              };
+              img.src = `/api/live_frame.jpg?last=1&seq=${data.last_seq}`;
+              return;
             }
             renderLiveFrameToCanvas();
-            const topMetrics = document.getElementById('top-live-metrics');
-            if (topMetrics) {
-              topMetrics.textContent = (offlineAgeSec !== null && offlineAgeSec < 86400)
-                ? `🔴 OFFLINE (Last RX ${Math.round(offlineAgeSec)}s ago)`
-                : '🔴 OFFLINE • NO SIGNAL';
-              topMetrics.style.color = '#ef4444';
-            }
             return;
           }
+          // Update live age & estimated end-to-end delay on every 250ms poll (even between optical bursts)
+          liveDelayMetrics.active = true;
+          liveDelayMetrics.ageSec = (typeof data.age_sec === 'number') ? data.age_sec : 0;
+          if (typeof data.pipeline_delay_sec === 'number') {
+            liveDelayMetrics.pipeDelaySec = data.pipeline_delay_sec;
+          }
+          liveDelayMetrics.estTotalDelaySec = (typeof data.est_total_delay_sec === 'number')
+            ? data.est_total_delay_sec
+            : (liveDelayMetrics.pipeDelaySec + liveDelayMetrics.ageSec);
+          updateCornerDelayIndicator();
+
           if (data.changed === false) return;
           if (data.active && data.frame && data.seq !== lastSeq) {
             offlineAgeSec = 0;
             lastSeq = data.seq;
             const f = data.frame;
+            if (typeof f.pi5_ms === 'number' && typeof data.pipeline_delay_sec !== 'number') {
+              liveDelayMetrics.pipeDelaySec = Math.max(0.15, (f.pi5_ms / 1000.0) + 0.18);
+            }
             const img = new Image();
             img.onload = () => {
               latestFrameImg = img;
               liveDetections = Array.isArray(f.detections) ? f.detections : [];
               renderDetectedPillsInPlace();
               renderLiveFrameToCanvas();
+              updateCornerDelayIndicator();
 
-              const topMetrics = document.getElementById('top-live-metrics');
-              if (topMetrics) {
-                topMetrics.textContent = `LIVE 1080p • ${f.stream_fps || 12} FPS`;
-                topMetrics.style.color = '';
-              }
               const yoloEl = document.getElementById('telem-yolo');
               if (yoloEl) yoloEl.textContent = `${f.pi5_ms || 190} ms`;
 

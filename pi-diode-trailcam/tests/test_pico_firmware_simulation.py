@@ -504,7 +504,30 @@ def test_corridor_turboshaft_smoke_tailchase_and_seismic_upgrades():
     )
     assert seis_step["seismic_event_class"] == "FOOTSTEP_OR_PERSON"
     assert seis_step["freeze_ema_update"] is False
-    print("    [+] Phase V2.2 Upgrades 1-5 (Turboshaft BPF, Pre-Wake, TC001 LWIR Smoke Fusion, 180-deg Tail-Chase & Seismic Blast Freeze): PASSED")
+
+    # Upgrade 6: Mandatory 1-Year Unattended Forest Power Budget & High-Side Buck Cutoff Gate
+    pwr_ok = pico_main.compute_annual_standby_power_budget(
+        battery_voltage_v=12.0,
+        battery_capacity_ah=24.0,
+        domain_a_sleep_mw=19.5,
+        wakes_per_day=3.0,
+        wake_duration_s=10.0,
+        wake_power_w=7.2,
+        buck_switched_downstream_of_relay=True,
+    )
+    assert pwr_ok["meets_1yr_requirement"] is True, f"1-Year power budget failed: {pwr_ok}"
+    assert pwr_ok["endurance_years"] >= 1.25
+    assert pwr_ok["total_wh_per_year"] < 200.0
+
+    # Verify that wiring the 5A buck upstream of the relay (unswitched Iq drain) is caught and rejected
+    pwr_bad = pico_main.compute_annual_standby_power_budget(
+        battery_voltage_v=12.0,
+        battery_capacity_ah=24.0,
+        domain_a_sleep_mw=19.5,
+        buck_switched_downstream_of_relay=False,
+    )
+    assert pwr_bad["meets_1yr_requirement"] is False, "Unswitched buck converter quiescent drain must fail 1-yr gate!"
+    print("    [+] Phase V2.2 Upgrades 1-6 (Turboshaft BPF, Pre-Wake, TC001 LWIR Smoke Fusion, 180-deg Tail-Chase, Seismic Blast Freeze & 1-Yr Power Gate): PASSED")
 
 
 if __name__ == "__main__":
