@@ -1093,7 +1093,7 @@ def evaluate_non_rf_corridor_belt_step(
              + 8-16 kHz quartz-locked ESC PWM switching sideband (SNR >= 5.0 dB) + frequency stability gate
              (jitter <= 4.5 Hz/s, rejecting 100% of Arctic summer 380-450 Hz mosquito/bird bio-clutter).
            * Branch B (Heavy Turboshaft / Coaxial / 5-Blade Rotorcraft): Sub-bass rotor BPF (14.0-95.0 Hz,
-             covering coaxial 2P/4P 31.2/62.4 Hz and 5-blade 39.2-40.0 Hz fundamentals where turboshaft engines
+             covering twin/multi-blade utility helicopter 2P/4P 31.2/62.4 Hz and 5-blade 39.2-40.0 Hz fundamentals where turboshaft engines
              emit 0 dB ESC PWM noise) + harmonic comb ratio (H2/H1 >= 1.10) + frequency stability gate
              (jitter <= 4.5 Hz/s) + physical non-decoy verification (sub-20 Hz 1P thickness-noise infrasound
              SNR >= 6.0 dB OR Acconeer XM125 blade-tip micro-Doppler >= 4.0 m/s, rejecting small-aperture
@@ -1271,7 +1271,7 @@ def classify_seismic_event_signature(
            impact generating PGV = 4.2-16.5 mm/s). Freezes `seis_ema` baseline adaptation
            (`freeze_ema_update = True`) so the shockwave never inflates the threshold or blinds the
            node to subsequent footsteps!
-        2. `HEAVY_TRACKED_OR_WHEELED_VEHICLE` (`0.8 <= pgv_mm_s < 4.0 mm/s` and `14 <= f_dom <= 48 Hz`):
+        2. `HEAVY_OFFROAD_OR_UTILITY_VEHICLE` (`0.8 <= pgv_mm_s < 4.0 mm/s` and `14 <= f_dom <= 48 Hz`):
            Sustained low-crest-factor ground rumble from heavy vehicles/machinery.
         3. `FOOTSTEP_OR_PERSON` (`0.08 <= pgv_mm_s < 0.8 mm/s` and `crest_factor >= 2.0`):
            Impulsive cadenced human footsteps on soil/rock/snow.
@@ -1288,7 +1288,7 @@ def classify_seismic_event_signature(
         freeze_ema = True
         updated_ema = ema_c
     elif 0.8 <= pgv < 4.0 and (14.0 <= f_hz <= 48.0):
-        event_class = "HEAVY_TRACKED_OR_WHEELED_VEHICLE"
+        event_class = "HEAVY_OFFROAD_OR_UTILITY_VEHICLE"
         freeze_ema = False
         diff_s = max(-128, min(128, cur_c - ema_c))
         updated_ema = ema_c + (diff_s >> EMA_SHIFT)

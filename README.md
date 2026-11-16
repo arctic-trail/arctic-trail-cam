@@ -11,7 +11,7 @@
 > These repositories are **100% open-source (`MIT License`) public-good engineering** for harsh Nordic & Baltic conditions.
 > * **No ego, no gatekeeping:** You do **not** need to ask permission to fork this, build a module on your kitchen table, use it for a university course/thesis, or spin a commercial product out of it.
 > * **Test logs > theory:** Almost everything here is currently at bench/simulation stage. If you build a €68 acoustic pod, freeze a battery at `-25 °C`, or 3D-print a sub-scale airframe and prove our numbers wrong—**please open a Pull Request or Issue with your real-world data!**
-> * **100% Civilian & Legal to Tinker With:** Everything in these repos (weather/wildlife nodes, optical diodes, airport/corridor acoustic logging, SAR navigation, cooperative own-drone soft-net recovery) is strictly civilian and legal for students, hobbyists, and labs to build and test. While the harsh-environment resilience techniques explored here—such as zero-RF optical fiber links, GNSS-denied navigation, acoustic/micro-Doppler drone detection, and low-cost COTS modular packaging—draw technical inspiration from drone and sensor technology widely seen in Ukraine and on public media, the **intended use case of this project is 100% civilian**.
+> * **100% Civilian & Legal to Tinker With:** Everything in these repos (weather/wildlife nodes, optical diodes, airport/corridor acoustic logging, SAR navigation, cooperative own-drone soft-net recovery) is strictly civilian and legal for students, hobbyists, and labs to build and test. While the harsh-environment resilience techniques explored here—such as zero-RF optical fiber links, GNSS-denied navigation, acoustic/micro-Doppler drone detection, and low-cost COTS modular packaging—draw technical inspiration from drone and sensor technology widely discussed in modern open engineering literature, the **intended use case of this project is 100% civilian**.
 
 > [!WARNING]
 > **PROTOTYPE DISCLAIMER — ACTIVE DEVELOPMENT & BENCHTOP TESTING IN PROGRESS (`v0.9-beta`)**
@@ -105,6 +105,17 @@ The complete itemized parts schedule (`[P01]`–`[P24]`), workshop tool list (`[
 | **Optional `Build D` (`sky-diode-relay`) — `200 m – 20 km` `2.4 GHz` NLOS Troposcatter Pair (`TX + RX`)** | 10-SKU DigiKey RF Eval-Board BOM (`2× ADALM-PLUTO`, `SE2576L`, `SKY65405`, `2× VBF-2435+`, `2× HG2414P`) | **`$1,341.94` (`~€1,235`)** | **`$462.00` (`~€425`)** *(`-65.6%`)* | **`$284.00` (`~€261`)** *(`-78.8%`)* | **[`SKY_RELAY_HARDWARE_SPEC_AND_BOM.md`](sky-diode-relay/hardware/SKY_RELAY_HARDWARE_SPEC_AND_BOM.md)** |
 
 ![Real-World Stage 2 Benchtop Build — Completed Breadboard Close-Up & Complete Powered System (Photos 57 & 58)](pi-diode-trailcam/docs/images/real_build/stage2_4b_verified_and_step2_5_usb_power_guide_v1.jpg)
+
+### 3.1 Zero-Chinese-BOM Path (`100% Allied / EU NDAA-Compliant` 1:1 Interchangeable Parts)
+
+The core compute, vision, optical-diode, and RF chain in this repository is already built on **UK, US, Canadian, Japanese, and Allied silicon** (`Raspberry Pi 5` & `Pico 2 RP2350` [UK], `Sony IMX708` [Japan], `Hailo-8L` [Israel], `StarTech MCMGBSCSM10` [Canada], `Hammond 1591BSBK` [Canada], `Adafruit MPM3610` & `ADS1115` [USA], `Sensor Nederland SM-24` [Netherlands/EU], `Analog Devices ADALM-PLUTO` + `Skyworks` + `Mini-Circuits` + `L-com` [USA], and `TDK-Lambda` [Japan]). For institutional, university, or public-safety builds requiring a **100% Zero-Chinese-BOM (`NDAA / EU Supply-Chain Compliant`)** configuration, the four consumer COTS modules in the fast-retail kit have **1:1 pin- and software-compatible Allied/EU drop-in replacements**:
+
+| BOM Code | Subsystem Role | Fast-Retail Bench Part | **100% Allied / EU Drop-In Replacement (`Zero-Chinese-BOM`)** | Interface & Software Compatibility |
+| :---: | :--- | :--- | :--- | :--- |
+| **`[P11]`** | **Millimeter-Wave Trail Radar** | `Hi-Link HLK-LD2450` (`24 GHz`, China) | **`Acconeer XM125` (`A121` `60 GHz` Pulsed Coherent Radar, `Sweden / EU`)** or **`Infineon BGT24LTR11` (`Germany / EU`)** or **`OmniPreSense OPS243-A` (`USA`)** | `Acconeer XM125` (`I2C 0x52` / `UART`) is **already natively supported** in [`pico_gatekeeper/main.py`](pi-diode-trailcam/pico_gatekeeper/main.py). |
+| **`[P08]`** | **3-Axis Wake Magnetometer** | `GY-271 / QMC5883L` (`I2C`, China) | **`Honeywell HMC5883L` (`USA`, `I2C 0x1E`)** or **`STMicroelectronics LIS3MDL` (`EU`, `I2C`)** | `I2C 0x1E` (`HMC5883L`), `0x0D`, and `0x2C` are **all natively auto-detected** at boot in [`pico_gatekeeper/main.py`](pi-diode-trailcam/pico_gatekeeper/main.py). |
+| **`[P06]`** | **Zone 2 Camera Trunk Extension** | `Arducam B0410` CSI-to-HDMI (`China`) | **`THine Solutions THSCM101` (`Japan`, V-by-One HS MIPI CSI-2 Extender)** or **`Raspberry Pi Ltd` (`UK`) Shielded FPC/FFC CSI-2 Cable** | 100% hardware-transparent `MIPI CSI-2` pass-through to `Pi 5` `J4`; zero `Picamera2` software changes. |
+| **`[P21]`** | **Zone 3 Buried Base Vault** | `QILIPSU IP67` (`285×195×130 mm`, China) | **`Fibox ARCA 302015` (`Finland / EU`, `300×200×150 mm`, `IP66/IP67` `IK10` `-40 °C` Polycarbonate)** or **`Ensto Cubo O` (`Finland / EU`)** | Identical bottom `M20`/`M12` gland layout and internal `12V` battery + `Pi 5` + optical-diode footprint. |
 
 ---
 

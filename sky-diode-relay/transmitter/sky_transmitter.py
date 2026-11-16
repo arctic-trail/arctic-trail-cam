@@ -1057,7 +1057,7 @@ class PlutoSDRTransmitter:
                 raise RuntimeError(f"ADALM-PLUTO SDR not reachable at {self.sdr_uri} and simulate_if_missing=False")
             return False
 
-    def transmit_vk7mo_frame(self, payload_bytes, fhss_key="FINLAND-BORDER-FHSS-KEY-2026", symbol_ms=16.0):
+    def transmit_vk7mo_frame(self, payload_bytes, fhss_key="ARCTIC-TRAIL-FHSS-KEY-2026", symbol_ms=16.0):
         tx_pkt = encode_vk7mo_lockin_frame(
             payload_bytes,
             symbol_ms=symbol_ms,
@@ -1109,7 +1109,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--fhss-key",
-        default="FINLAND-BORDER-FHSS-KEY-2026",
+        default="ARCTIC-TRAIL-FHSS-KEY-2026",
         help="Shared secret key for cryptographic FHSS symbol and RF carrier hopping.",
     )
     parser.add_argument(

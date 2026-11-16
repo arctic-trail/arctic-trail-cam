@@ -819,7 +819,7 @@ def test_100km_troposcatter_rain_scatter_all_weather_link():
 def test_simultaneous_cfo_jammer_and_rayleigh_multipath_fade():
     print("[*] 22. Validating Combined +290 Hz CFO Drift, +20 dB In-Band Jammer & 8-Symbol Rayleigh Multipath Fade Null...")
     payload = b'{"node":"NODE-TROPO-EW-01","status":"SURVIVED_CFO_JAMMER_AND_RAYLEIGH_FADE"}'
-    fhss_key = "FINLAND-TROPO-EW-2026"
+    fhss_key = "ARCTIC-TRAIL-RELAY-2026"
     true_cfo_hz = 290.0
     tx_pkt = encode_vk7mo_lockin_frame(
         payload, symbol_ms=16.0, base_tone_hz=1500.0 + true_cfo_hz, enable_fec=True, fhss_key=fhss_key
@@ -874,7 +874,7 @@ def test_simultaneous_cfo_jammer_and_rayleigh_multipath_fade():
 
 def test_broadband_barrage_and_pulsed_chirp_jammer_immunity():
     print("[*] 23. Validating Wideband Carrier Hopping, +26 dB Barrage Jammer Gate & Pulsed/Chirp Jammer Recovery...")
-    fhss_key = "EAST-FINLAND-ANTI-BARRAGE-KEY-2026"
+    fhss_key = "ARCTIC-TRAIL-RELAY-KEY-2026"
     hops_mhz = derive_fhss_carrier_schedule(fhss_key, num_passes=3)
     assert len(hops_mhz) == 3
     # Verify Pass 0 and Pass 1 hop into the lower (2372-2396 MHz) and upper (2485-2498 MHz) guard bands

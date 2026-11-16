@@ -376,7 +376,7 @@ def test_corridor_rotorcraft_smoke_and_seismic_upgrades():
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../pi5_sender_node")))
     import sender_node
 
-    # Upgrade 1A: Heavy Turboshaft Rotorcraft (31.2 Hz coaxial 2P / 39.2 Hz 5-blade, 0 dB ESC PWM, H2/H1 = 1.65)
+    # Upgrade 1A: Heavy Turboshaft Rotorcraft (31.2 Hz utility rotorcraft 2P / 39.2 Hz 5-blade, 0 dB ESC PWM, H2/H1 = 1.65)
     heavy_real = pico_main.evaluate_non_rf_corridor_belt_step(
         rotor_bpf_hz=31.2,
         rotor_bpf_snr_db=16.0,

@@ -341,7 +341,7 @@ Because the lower third of the **`QILIPSU` Base Vault (`[P21]`, `285 × 195 × 1
 | Air Carrier Service (US $\rightarrow$ Nordic / EU) | Typical Rate (`8.4 lbs / 3.81 kg`) | Transit Time | Customs / Tracking Notes |
 | :--- | :--- | :--- | :--- |
 | **UPS Worldwide Expedited** *(via Pirate Ship)* | **`~$62 – $72`** | `3 – 5 Days` | Door-to-door air tracking + electronic customs pre-clearance |
-| **USPS Priority Mail International** *(Commercial Rate)* | **`~$68 – $74`** | `6 – 10 Days` | Handed off to national postal service (*Posti* in Finland) |
+| **International Postal Parcel (Posti / EMS)** *(Commercial Rate)* | **`~$68 – $74`** | `6 – 10 Days` | Handed off to national postal service (*Posti* in Finland) |
 | **DHL Express Worldwide** *(via Pirate Ship)* | **`~$82 – $93`** | `2 – 3 Days` | Fastest express air courier with SMS recipient customs link |
 
 ### 10.3 Customs Declaration (`CN23`) & 5-Minute Local Battery Hookup at Destination

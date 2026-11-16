@@ -1637,7 +1637,7 @@ class PlutoSDRReceiver:
 
     def receive_and_demodulate(
         self,
-        fhss_key="FINLAND-BORDER-FHSS-KEY-2026",
+        fhss_key="ARCTIC-TRAIL-FHSS-KEY-2026",
         symbol_ms=16.0,
         simulated_passes=None,
         cfo_search_range_hz=400.0,
